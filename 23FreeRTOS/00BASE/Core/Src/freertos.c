@@ -61,13 +61,6 @@ const osThreadAttr_t myTask_LED_R_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
-/* Definitions for myTask_BEEP_T */
-osThreadId_t myTask_BEEP_THandle;
-const osThreadAttr_t myTask_BEEP_T_attributes = {
-  .name = "myTask_BEEP_T",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityLow,
-};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -76,7 +69,6 @@ const osThreadAttr_t myTask_BEEP_T_attributes = {
 
 void StartDefaultTask(void *argument);
 void myTask_LED_R_f(void *argument);
-void myTask_BEEP_T_f(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -113,9 +105,6 @@ void MX_FREERTOS_Init(void) {
   /* creation of myTask_LED_R */
   myTask_LED_RHandle = osThreadNew(myTask_LED_R_f, NULL, &myTask_LED_R_attributes);
 
-  /* creation of myTask_BEEP_T */
-  myTask_BEEP_THandle = osThreadNew(myTask_BEEP_T_f, NULL, &myTask_BEEP_T_attributes);
-
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
@@ -141,6 +130,12 @@ __weak void StartDefaultTask(void *argument)
   {
       HAL_GPIO_TogglePin(LED_G_GPIO_Port, LED_G_Pin);
       osDelay(100);
+      HAL_GPIO_TogglePin(LED_G_GPIO_Port, LED_G_Pin);
+      osDelay(100);
+      HAL_GPIO_TogglePin(LED_G_GPIO_Port, LED_G_Pin);
+      osDelay(100);
+      HAL_GPIO_TogglePin(LED_G_GPIO_Port, LED_G_Pin);
+      osDelay(700);
   }
   /* USER CODE END StartDefaultTask */
 }
@@ -159,30 +154,9 @@ __weak void myTask_LED_R_f(void *argument)
   for(;;)
   {
       HAL_GPIO_TogglePin(LED_R_GPIO_Port, LED_R_Pin);
-      osDelay(250);
+      osDelay(500);
   }
   /* USER CODE END myTask_LED_R_f */
-}
-
-/* USER CODE BEGIN Header_myTask_BEEP_T_f */
-/**
-* @brief Function implementing the myTask_BEEP_T thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_myTask_BEEP_T_f */
-__weak void myTask_BEEP_T_f(void *argument)
-{
-  /* USER CODE BEGIN myTask_BEEP_T_f */
-  /* Infinite loop */
-  for(;;)
-  {
-      HAL_GPIO_TogglePin(BEEP_GPIO_Port, BEEP_Pin);
-      osDelay(60);
-      HAL_GPIO_TogglePin(BEEP_GPIO_Port, BEEP_Pin);
-      osDelay(440);
-  }
-  /* USER CODE END myTask_BEEP_T_f */
 }
 
 /* Private application code --------------------------------------------------*/

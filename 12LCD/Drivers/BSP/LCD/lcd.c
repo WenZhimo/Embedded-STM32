@@ -1458,7 +1458,7 @@ void my_lcd_show_image(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uns
             uint32_t n = i*w+j ;
             picH=*(image_data+n*2); //数据低位在前
             picL=*(image_data+n*2+1);
-            lcd_draw_point(j,i,picL<<8|picH);
+            lcd_draw_point(j+x,i+y,picL<<8|picH);
         }
     }
     //lcd_set_window(0,0,lcddev.width-1,lcddev.height-1);//恢复显示窗口为全屏

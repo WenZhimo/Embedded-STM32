@@ -42,34 +42,24 @@ int main(void)
     g_back_color = BLACK ;
     g_point_color=WHITE;
     lcd_clear(BLACK);
-    //my_lcd_show_image(0,0,320,480,gImage_魔理沙);
+    my_lcd_show_image(0,27,320,426,gImage_MutsumiSaki320_426);
     //my_lcd_show_string(10,20,lcd_id,32,0,g_point_color);
     
     uint8_t len;
     uint16_t times = 0;
     UART_HandleTypeDef g_uart_handle=g_uart1_handle;
     int ox=0,oy = 0,bx=1,by=1;
+    
     while (1)
     {
 
-        lcd_clear(BLACK);
-        lcd_draw_circle(ox+=bx,oy+=by,3,g_point_color);
-        if(ox>=320)bx=-1;
-        if(oy>=480)by=-1;
-        if(ox<=0)bx=1;
-        if(oy<=0)by=1;
-//        if (g_usart_rx_sta & 0x8000)        /* 接收到了数据? */
-//        {
-//            len = g_usart_rx_sta & 0x3fff;  /* 得到此次接收到的数据长度 */
-//            printf("\r\nyour sended messages were:%d\r\n",len);
+//        lcd_clear(BLACK);
+//        lcd_draw_circle(ox+=bx,oy+=by,3,g_point_color);
+//        if(ox>=320)bx=-1;
+//        if(oy>=480)by=-1;
+//        if(ox<=0)bx=1;
+//        if(oy<=0)by=1;
 
-//            HAL_UART_Transmit(&g_uart_handle,(uint8_t*)g_usart_rx_buf, len, 1000);    /* 以阻塞方式发送接收到的数据 */
-//            while(__HAL_UART_GET_FLAG(&g_uart_handle,UART_FLAG_TC) != SET);           /* 等待发送结束 */
-//            printf("\r\n\r\n");             /* 插入换行 */
-//            my_lcd_show_string(10,10,(char *)g_usart_rx_buf,16,0,WHITE);
-//            g_usart_rx_sta = 0;
-//        }
-        
         delay_ms(5);
     }
 }
