@@ -14,3 +14,12 @@
 [**【爽！手把手教你用 VSCode 开发 STM32【大人，时代变啦！！！】】**](https://www.bilibili.com/video/BV1QfbpzGENy/?share_source=copy_web&vd_source=a9d52604c74e8a682e8f5b4ef43d9198)
 
 该视频详细展示了如何配置 VS Code 环境、安装必要的扩展和工具链，以及开始您的第一个 STM32 项目。
+
+如何生成hex文件：
+在build目录下，使用命令
+`arm-none-eabi-objcopy -O ihex <工程名字>.elf <工程名字>.hex`
+即可。
+
+工程名字可以查看cmake输出，找到类似
+`[build] [36/36] Linking C executable F429BASE.elf`
+的语句即可，F429BASE就是工程名字。
