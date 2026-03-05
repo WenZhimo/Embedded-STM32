@@ -1,5 +1,10 @@
 
 # STM32 学习项目展示
+## 学习笔记查看
+对于`21KaoQingSystem_Server`及以前的的项目，学习笔记包含在对应外设代码文件中。
+
+对于`22STM32G4_GPIO_MOTOR`及以后的项目，学习笔记可在[语雀知识库-嵌入式](https://www.yuque.com/g/wenzhimo/qianrushi/collaborator/join?token=jJbeqT6BIV3fngcc&source=book_collaborator)中查看；也可以在[我的博客-嵌入式分类](https://www.wenzhimo.xyz/category/article/programing/%e5%b5%8c%e5%85%a5%e5%bc%8f/)中查看。
+
 
 ## 使用 VS Code 开发 STM32
 
@@ -7,7 +12,7 @@
 
 ### 快速入门
 
-如果您是第一次使用 VS Code 开发 STM32，我们推荐参考以下教程：
+如果您是第一次使用 VS Code 开发 STM32，我推荐参考以下教程：
 
 
 
