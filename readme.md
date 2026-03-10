@@ -38,7 +38,7 @@
 使用 file(GLOB_RECURSE ...) 可以递归扫描目标文件夹及其所有子文件夹。
 
 ```CMake
-# 使用 GLOB_RECURSE 递归扫描所有的 .c 文件，并带上 CONFIGURE_DEPENDS 防治文件更新不触发编译的问题
+# 使用 GLOB_RECURSE 递归扫描所有的 .c 文件，并带上 CONFIGURE_DEPENDS 防止文件更新不触发编译的问题
 file(GLOB_RECURSE THIRDPARTY_SOURCES CONFIGURE_DEPENDS 
     "ThirdParty/MyLib/*.c"
     # 如果有汇编文件也可以一起加上

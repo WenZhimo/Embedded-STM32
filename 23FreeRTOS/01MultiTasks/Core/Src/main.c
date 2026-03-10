@@ -19,11 +19,15 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
+#include "dma.h"
+#include "usart.h"
 #include "gpio.h"
+#include "fmc.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "../../ThirdParty/MyLib/LED/LED.h"
+#include "../../ThirdParty/MyLib/LCD/lcd.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -88,7 +92,28 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
+  MX_FMC_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+
+
+  /** =============================初始化 LCD 屏幕============================= */
+  /* 1. 执行 LCD 芯片的寄存器初始化，识别 ID 并点亮背光 */
+  lcd_init();
+  lcd_clear(BLACK);
+  /* 2. 基础字体渲染测试：调用 lcd.c 中自带的 ASCII 字符显示函数 */
+  lcd_show_string(10, 10, 300, 32, 24, "Game Engine Ready!", RED);
+  lcd_show_string(10, 50, 300, 24, 16, "STM32F429 FMC OK", GREEN);
+  lcd_show_string(10, 80, 300, 24, 16, "LCD Init Successful.", WHITE);
+  /* 3. 显示一个简单的图形，验证 LCD 的基本绘图功能 */
+  lcd_fill(80, 100, 100, 120, BLUE);
+  /** ============================= 初始化串口 ============================= */
+  //开启串口空闲中断，接收数据到rx_buffer
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rx_buffer_1, MAX_CMD_LEN);
+  // 关闭半传输中断
+  __HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
+
 
   /* USER CODE END 2 */
 
