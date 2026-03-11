@@ -67,6 +67,10 @@ void Error_Handler(void);
 #define KEY1_GPIO_Port GPIOH
 #define KEY0_Pin GPIO_PIN_3
 #define KEY0_GPIO_Port GPIOH
+#define RC522_CS_Pin GPIO_PIN_4
+#define RC522_CS_GPIO_Port GPIOA
+#define RC522_RST_Pin GPIO_PIN_4
+#define RC522_RST_GPIO_Port GPIOC
 #define LEDG_Pin GPIO_PIN_0
 #define LEDG_GPIO_Port GPIOB
 #define LEDR_Pin GPIO_PIN_1

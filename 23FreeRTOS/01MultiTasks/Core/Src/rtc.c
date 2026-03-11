@@ -143,4 +143,45 @@ void HAL_RTC_MspDeInit(RTC_HandleTypeDef* rtcHandle)
 
 /* USER CODE BEGIN 1 */
 
+/*
+ * @brief 动态更新 RTC 时间与日期
+ * @param year  年份 (0-99，代表 2000-2099)
+ * @param month 月份 (1-12)
+ * @param date  日期 (1-31)
+ * @param hour  小时 (0-23)
+ * @param min   分钟 (0-59)
+ * @param sec   秒钟 (0-59)
+ */
+void Update_RTC_Time(uint8_t year, uint8_t month, uint8_t date,
+                     uint8_t hour, uint8_t min, uint8_t sec)
+{
+    RTC_TimeTypeDef sTime = {0};
+    RTC_DateTypeDef sDate = {0};
+
+    if(month < 1 || month > 12) return;
+    if(date  < 1 || date  > 31) return;
+    if(hour  > 23) return;
+    if(min   > 59) return;
+    if(sec   > 59) return;
+
+    sTime.Hours = hour;
+    sTime.Minutes = min;
+    sTime.Seconds = sec;
+    sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+    sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+
+    HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+
+    sDate.Year = year;
+    sDate.Month = month;
+    sDate.Date = date;
+    sDate.WeekDay = RTC_WEEKDAY_MONDAY;  // 可替换为计算函数
+
+    HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
+
+    __HAL_RCC_PWR_CLK_ENABLE();
+    HAL_PWR_EnableBkUpAccess();
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0x32F4);
+    HAL_PWR_DisableBkUpAccess();
+}
 /* USER CODE END 1 */

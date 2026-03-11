@@ -30,6 +30,7 @@
 #include "../../ThirdParty/MyLib/LCD/lcd.h"
 
 uint8_t rx_buffer_1[MAX_CMD_LEN];
+uint8_t rx_buffer_1_flag = 0;
 /* USER CODE END 0 */
 
 UART_HandleTypeDef huart1;
@@ -170,27 +171,13 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     {
         // 此时一包数据接收完成
         // Size 变量就是本次实际接收到的字节数！非常方便！
-        //RTC测试
-        RTC_TimeTypeDef sTime = {0};
-        RTC_DateTypeDef sDate = {0};
-
-        // 先读 Time，此时硬件为了保证时间一致性，会把日期寄存器“锁住”。
-        // 只有当你紧接着调用 HAL_RTC_GetDate() 读取日期后，寄存器才会“解锁”。
-        HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-        // 紧接着必须读 Date (即使你不用 Date 的数据，也必须调用此函数解锁硬件)
-        HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
-        //不过当你只需要date时，只调用HAL_RTC_GetDate并不会“锁住”日期寄存器。
-        // 3. 打印时间 (注意我们之前在 CMake 里解决的 printf 缓冲和结束符问题)
-        printf("Time: %02d:%02d:%02d, Date: 20%02d-%02d-%02d\r\n", 
-               sTime.Hours, sTime.Minutes, sTime.Seconds,
-               sDate.Year, sDate.Month, sDate.Date);
+        
         // 1. 数据处理
         // 示例：将接收到的指令丢给某个处理函数
         // ParseMotorCommand(rx_buffer_1, Size); 
-        printf("Received: %s", rx_buffer_1);
+        
         //HAL_UART_Transmit(&huart1, rx_buffer_1, Size, 100);
-        HAL_GPIO_TogglePin(LEDR_GPIO_Port, LEDR_Pin); // 接收指令时切换 LED 灯状态，方便观察
-        memset(rx_buffer_1, 0, Size); // 清空已处理的数据，准备接收下一帧指令
+        rx_buffer_1_flag = 1; // 设置标志位，通知主循环有新数据了
 
         // 2. 重新启动接收，准备接收下一帧变长指令
         HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rx_buffer_1, MAX_CMD_LEN);

@@ -92,6 +92,8 @@ void HardFault_Handler(void)
   while (1)
   {
     /* USER CODE BEGIN W1_HardFault_IRQn 0 */
+    //printf("Hard Fault Detected!\r\n");
+    //return; // 这里尝试返回主循环，看看是否能继续运行
     /* USER CODE END W1_HardFault_IRQn 0 */
   }
 }

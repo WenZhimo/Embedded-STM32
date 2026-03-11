@@ -37,6 +37,7 @@ extern UART_HandleTypeDef huart1;
 /* USER CODE BEGIN Private defines */
 #define MAX_CMD_LEN 256
 extern uint8_t rx_buffer_1[MAX_CMD_LEN];
+extern uint8_t rx_buffer_1_flag;
 /* USER CODE END Private defines */
 
 void MX_USART1_UART_Init(void);

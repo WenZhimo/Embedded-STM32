@@ -21,14 +21,17 @@
 #include "cmsis_os.h"
 #include "dma.h"
 #include "rtc.h"
+#include "spi.h"
 #include "usart.h"
 #include "gpio.h"
 #include "fmc.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
 #include "../../ThirdParty/MyLib/LED/LED.h"
 #include "../../ThirdParty/MyLib/LCD/lcd.h"
+#include "../../ThirdParty/MyLib/RC522/rc522.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -97,6 +100,7 @@ int main(void)
   MX_FMC_Init();
   MX_USART1_UART_Init();
   MX_RTC_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
 
 
@@ -110,6 +114,9 @@ int main(void)
   lcd_show_string(10, 80, 300, 24, 16, "LCD Init Successful.", WHITE);
   /* 3. 显示一个简单的图形，验证 LCD 的基本绘图功能 */
   lcd_fill(80, 100, 100, 120, BLUE);
+
+
+
   /** ============================= 初始化串口 ============================= */
   //开启串口空闲中断，接收数据到rx_buffer
   HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rx_buffer_1, MAX_CMD_LEN);
