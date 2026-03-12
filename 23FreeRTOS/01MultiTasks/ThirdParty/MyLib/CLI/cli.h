@@ -57,9 +57,7 @@ struct cli
 /* ---------------- 接口函数 ---------------- */
 
 /* 初始化 CLI 实例 */
-void CLI_Init(cli_t *cli,
-              const cli_cmd_entry_t *table,
-              uint16_t count);
+void CLI_Init(cli_t *cli,const cli_cmd_entry_t *table,uint16_t count);
 
 
 /* 清空解析缓冲区 */
@@ -73,31 +71,22 @@ void CLI_Reset(cli_t *cli);
  * 可包含多个命令，例如：
  * >>cmd1<<{arg1}>>cmd2<<{arg2}
  */
-void CLI_Input(cli_t *cli,
-               const char *data,
-               size_t len);
+void CLI_Input(cli_t *cli,const char *data,size_t len);
 
 
 /* 直接解析完整字符串（不使用内部累积） */
-void CLI_ParseLine(cli_t *cli,
-                   const char *line);
+void CLI_ParseLine(cli_t *cli,const char *line);
 
 
 /* 在命令表中查找命令 */
-const cli_cmd_entry_t* CLI_FindCommand(cli_t *cli,
-                                       const char *cmd,
-                                       size_t len);
+const cli_cmd_entry_t* CLI_FindCommand(cli_t *cli,const char *cmd,size_t len);
 
 
 /* 解析单条命令
  * 格式:
  * >>cmd<<{args}
  */
-int CLI_ParseCommand(cli_t *cli,
-                     const char *cmd_begin,
-                     const char *cmd_end,
-                     const char *arg_begin,
-                     const char *arg_end);
+int CLI_ParseCommand(cli_t *cli,const char *cmd_begin,const char *cmd_end,const char *arg_begin,const char *arg_end);
 
 
 #ifdef __cplusplus

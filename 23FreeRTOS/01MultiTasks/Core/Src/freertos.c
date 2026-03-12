@@ -30,9 +30,11 @@
 #include "../../ThirdParty/MyLib/LED/LED.h"
 #include "../../ThirdParty/MyLib/LCD/lcd.h"
 #include "../../ThirdParty/MyLib/RC522/rc522.h"
+#include "../../ThirdParty/MyLib/RC522/ndef.h"
 #include "usart.h"
 #include "rtc.h"
 #include "../../ThirdParty/MyLib/CLI/cli.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -78,7 +80,7 @@ const osThreadAttr_t Task_LEDG_attributes = {
 osThreadId_t Task_RC522Handle;
 const osThreadAttr_t Task_RC522_attributes = {
   .name = "Task_RC522",
-  .stack_size = 128 * 4,
+  .stack_size = 2048 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
 /* Definitions for Task_usart1 */
@@ -163,9 +165,9 @@ void AppTask_LEDR(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    LEDR_Toggle();
-    lcd_fill(0, 100, 20, 120, !HAL_GPIO_ReadPin(LEDR_GPIO_Port, LEDR_Pin)?RED:BLACK);
-    osDelay(500);
+    // LEDR_Toggle();
+    // lcd_fill(0, 100, 20, 120, !HAL_GPIO_ReadPin(LEDR_GPIO_Port, LEDR_Pin)?RED:BLACK);
+     osDelay(500);
   }
   /* USER CODE END AppTask_LEDR */
 }
@@ -185,18 +187,18 @@ void AppTask_LEDG(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    LEDG_Toggle();
-    lcd_fill(40, 100, 60, 120, !HAL_GPIO_ReadPin(LEDG_GPIO_Port, LEDG_Pin)?GREEN:BLACK);
-    osDelay(100);
-    LEDG_Toggle();
-    lcd_fill(40, 100, 60, 120, !HAL_GPIO_ReadPin(LEDG_GPIO_Port, LEDG_Pin)?GREEN:BLACK);
-    osDelay(100);
-    LEDG_Toggle();
-    lcd_fill(40, 100, 60, 120, !HAL_GPIO_ReadPin(LEDG_GPIO_Port, LEDG_Pin)?GREEN:BLACK);
-    osDelay(100);
-    LEDG_Toggle();
-    lcd_fill(40, 100, 60, 120, !HAL_GPIO_ReadPin(LEDG_GPIO_Port, LEDG_Pin)?GREEN:BLACK);
-    vTaskDelayUntil( &xLastWakeTime, xFrequency );
+    // LEDG_Toggle();
+    // lcd_fill(40, 100, 60, 120, !HAL_GPIO_ReadPin(LEDG_GPIO_Port, LEDG_Pin)?GREEN:BLACK);
+    // osDelay(100);
+    // LEDG_Toggle();
+    // lcd_fill(40, 100, 60, 120, !HAL_GPIO_ReadPin(LEDG_GPIO_Port, LEDG_Pin)?GREEN:BLACK);
+    // osDelay(100);
+    // LEDG_Toggle();
+    // lcd_fill(40, 100, 60, 120, !HAL_GPIO_ReadPin(LEDG_GPIO_Port, LEDG_Pin)?GREEN:BLACK);
+    // osDelay(100);
+    // LEDG_Toggle();
+    // lcd_fill(40, 100, 60, 120, !HAL_GPIO_ReadPin(LEDG_GPIO_Port, LEDG_Pin)?GREEN:BLACK);
+     vTaskDelayUntil( &xLastWakeTime, xFrequency );
     //osDelayUntil(xLastWakeTime += xFrequency);//这是CMSIS2的对应封装函数
   }
   /* USER CODE END AppTask_LEDG */
@@ -214,7 +216,7 @@ void AppTask_RC522(void *argument)
   /* USER CODE BEGIN AppTask_RC522 */
   /** ============================= 初始化RC522 ============================= */
   // 硬件初始化后，复位射频模块并打开天线
-  PcdReset_rtos();          // 软复位
+  PcdReset();          // 软复位
   HAL_Delay(50);       // 留出足够的芯片启动时间
 
   PcdAntennaOff();     // 先关天线
@@ -222,7 +224,7 @@ void AppTask_RC522(void *argument)
   PcdAntennaOn();      // 再开天线 (必须有这个动作，否则不发射电磁波)
   unsigned char version = ReadRawRC(VersionReg); // 读取版本号寄存器
   printf("RC522 Version: 0x%02X\r\n", version);
-  PcdReset_rtos(); // 再复位一次，确保配置生效
+  PcdReset(); // 再复位一次，确保配置生效
   osDelay(50); // 给芯片启动留一点时间
   PcdAntennaOff(); 
   osDelay(10);
@@ -231,9 +233,7 @@ void AppTask_RC522(void *argument)
 
   uint8_t CardType[2];
   uint8_t CardUID[4];
-  uint8_t MyReadBuffer[16];
-  uint8_t MyWriteData[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
-
+  int8_t status;
   /* Infinite loop */
   for(;;)
   {
@@ -247,38 +247,47 @@ void AppTask_RC522(void *argument)
             // 比如，打印卡号：printf("Card UID: %02X %02X %02X %02X\r\n", CardUID[0], CardUID[1], CardUID[2], CardUID[3]);
             printf("Card UID: %02X %02X %02X %02X\r\n", CardUID[0], CardUID[1], CardUID[2], CardUID[3]);
             
-            // --- 写入测试 (写入到第 4 块) ---
-            // if (M1_WriteCardBlock(CardUID, 4, M1_DefaultKey, MyWriteData) == MI_OK)
-            // {
-            //     printf("数据写入成功！\r\n");
-            // }
+            // 格式化卡片为NDEF空白卡
+            status=NDEF_FormatUniversal(CardUID);
+            if (status != MI_OK) {
+                printf("Failed to Format Card. Status Code: %d\r\n", status);
+            }else {
+                printf("Card Formatted Successfully!\r\n");
+            }
+            M1_ForceWakeUp(CardUID);
+            
+            NDEF_Message myNdefMsg;
 
-            // --- 读取测试 (读取第 4 块) ---
-            if (M1_ReadCardBlock(CardUID, 4, M1_DefaultKey, MyReadBuffer) == MI_OK)
-            {
-                printf("块 4 数据: ");
-                for(int i = 0; i < 16; i++) {
-                    printf("%02X ", MyReadBuffer[i]);
-                }
-                printf("\r\n");
+            // 1. 初始化空消息
+            NDEF_Message_Init(&myNdefMsg);
+
+            // 2. 添加第一条记录：让手机弹窗打开网页
+            NDEF_AddUriRecord(&myNdefMsg, URI_PREFIX_HTTPS_WWWDOT, "wenzhimo.xyz");
+
+            // 3. 添加第二条记录：传递额外的文本信息
+            NDEF_AddTextRecord(&myNdefMsg, "zh", "你好，世界！这卡片支持多条NDEF。");
+
+            NDEF_AddTextRecord(&myNdefMsg, "zh", "如你所见，这些记录时在单片机上生成并写入的。");
+            
+            NDEF_AddTextRecord(&myNdefMsg, "zh", "想要更多记录？");
+            NDEF_AddTextRecord(&myNdefMsg, "zh", "更多记录？");
+            NDEF_AddTextRecord(&myNdefMsg, "zh", "更多？");
+
+            // 4. 写入卡片 (会自动把上述两条记录打包并计算好头部 MB/ME 标志)
+            status = NDEF_WriteToCard(CardUID, &myNdefMsg);
+            
+            if (status == MI_OK) {
+                printf("NDEF Message Written Successfully!\r\n");
+            } else {
+                printf("Failed to Write NDEF Message. Status Code: %d\r\n", status);
             }
-            else
-            {
-                printf("读取失败：可能是密码错误或扇区损坏。\r\n");
-            }
-            
-            
-            
+
             // 操作完成后，让卡片休眠，防止一直重复读取
             PcdHalt(); 
-            
-           
-            
+  
         }
     }
-    else{
-        //printf("No Card\r\n");
-    }
+    
     
     osDelay(1000); // 延时防抖
   }
