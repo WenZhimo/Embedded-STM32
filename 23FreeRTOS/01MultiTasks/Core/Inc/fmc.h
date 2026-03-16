@@ -32,6 +32,7 @@
 /* USER CODE END Includes */
 
 extern SRAM_HandleTypeDef hsram1;
+extern SDRAM_HandleTypeDef hsdram1;
 
 /* USER CODE BEGIN Private defines */
 
@@ -40,6 +41,8 @@ extern SRAM_HandleTypeDef hsram1;
 void MX_FMC_Init(void);
 void HAL_SRAM_MspInit(SRAM_HandleTypeDef* hsram);
 void HAL_SRAM_MspDeInit(SRAM_HandleTypeDef* hsram);
+void HAL_SDRAM_MspInit(SDRAM_HandleTypeDef* hsdram);
+void HAL_SDRAM_MspDeInit(SDRAM_HandleTypeDef* hsdram);
 
 /* USER CODE BEGIN Prototypes */
 

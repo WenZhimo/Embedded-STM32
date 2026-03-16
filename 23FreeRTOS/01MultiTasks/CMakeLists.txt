@@ -7,6 +7,9 @@ cmake_minimum_required(VERSION 3.22)
 # User is free to modify the file as much as necessary
 #
 
+
+
+
 # Setup compiler settings
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -37,10 +40,14 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
+
+
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
 )
+
+
 
 # 1. 先用 GLOB_RECURSE 把所有的 .c 文件扫进 THIRDPARTY_SOURCES 列表中
 # （强烈建议加上 ${CMAKE_CURRENT_SOURCE_DIR} 确保获取准确的绝对路径）

@@ -31,7 +31,7 @@ typedef struct {
     NDEF_RecordType type;        
     uint8_t uriCode;             // 仅 URI 使用
     char language[3];            // 仅 Text 使用
-    uint8_t payload[48];         // 载荷数据 (可根据单片机RAM调整大小)
+    uint8_t payload[256];         // 载荷数据 (可根据单片机RAM调整大小)
     uint8_t payloadLength;       
 } NDEF_Record;
 
@@ -69,6 +69,12 @@ int8_t NDEF_ReadFromCard(uint8_t *uid, NDEF_Message *msg);
 int8_t NDEF_FormatBlankCard(uint8_t *uid);
 // 自适应识别卡片状态并再格式化为 空白 NDEF 卡
 int8_t NDEF_FormatUniversal(uint8_t *uid);
+// 将任意卡片格式化为出厂白卡
+int8_t NDEF_FormatToBlankCard(uint8_t *uid);
 
+// 测试函数：向卡片写入一条 URI 记录 (用于验证写入功能)
+void NDEF_Test_WriteToCard(uint8_t *uid);
+// 测试函数：从卡片读取 NDEF 消息并打印内容 (用于验证读取功能)
+void NDEF_Test_ReadFromCard(uint8_t *uid);
 
 #endif

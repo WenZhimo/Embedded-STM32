@@ -177,7 +177,6 @@ typedef struct
 #define LGRAY           0xC618      /* 浅灰色(PANNEL),窗体背景色 */ 
 #define LGRAYBLUE       0xA651      /* 浅灰蓝色(中间层颜色) */ 
 #define LBBLUE          0x2B12      /* 浅棕蓝色(选择条目的反色) */ 
-
 /*自定义颜色 */
 
 
@@ -194,12 +193,11 @@ typedef struct
 #define Moccasin            0xff36  //鹿皮鞋
 #define LightSalmon         0xfd0f  //浅鲜肉(鲑鱼)色
 #define LightCoral          0xf410  //淡珊瑚色
-
 /******************************************************************************************/
 /* SSD1963相关配置参数(一般不用改) */
 
 /* LCD分辨率设置 */ 
-#define SSD_HOR_RESOLUTION      320     /* LCD水平分辨率 */ 
+#define SSD_HOR_RESOLUTION      800     /* LCD水平分辨率 */ 
 #define SSD_VER_RESOLUTION      480     /* LCD垂直分辨率 */ 
 
 /* LCD驱动参数设置 */ 

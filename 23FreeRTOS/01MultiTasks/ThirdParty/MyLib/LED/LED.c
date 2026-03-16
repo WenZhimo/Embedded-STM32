@@ -6,7 +6,7 @@
 * @retval None
 */
 void LEDR(uint8_t state) {
-   HAL_GPIO_WritePin(LEDR_GPIO_Port, LEDR_Pin, (GPIO_PinState)state);
+   HAL_GPIO_WritePin(LEDR_GPIO_Port, LEDR_Pin, (GPIO_PinState)!state);
 }
 
 /**
@@ -15,7 +15,7 @@ void LEDR(uint8_t state) {
 * @retval None
 */
 void LEDG(uint8_t state) {
-    HAL_GPIO_WritePin(LEDG_GPIO_Port, LEDG_Pin, (GPIO_PinState)state);
+    HAL_GPIO_WritePin(LEDG_GPIO_Port, LEDG_Pin, (GPIO_PinState)!state);
 }
 /**
 * @brief 切换LEDR的状态

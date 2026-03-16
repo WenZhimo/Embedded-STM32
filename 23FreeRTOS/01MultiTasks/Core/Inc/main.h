@@ -75,6 +75,8 @@ void Error_Handler(void);
 #define LEDG_GPIO_Port GPIOB
 #define LEDR_Pin GPIO_PIN_1
 #define LEDR_GPIO_Port GPIOB
+#define USB_PWR_Pin GPIO_PIN_15
+#define USB_PWR_GPIO_Port GPIOA
 #define LCD_BL_Pin GPIO_PIN_5
 #define LCD_BL_GPIO_Port GPIOB
 

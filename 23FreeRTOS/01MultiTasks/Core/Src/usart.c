@@ -177,7 +177,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         // ParseMotorCommand(rx_buffer_1, Size); 
         
         //HAL_UART_Transmit(&huart1, rx_buffer_1, Size, 100);
-        rx_buffer_1_flag = 1; // 设置标志位，通知主循环有新数据了
+        rx_buffer_1_flag = Size; // 设置标志位，通知任务有新数据了
 
         // 2. 重新启动接收，准备接收下一帧变长指令
         HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rx_buffer_1, MAX_CMD_LEN);

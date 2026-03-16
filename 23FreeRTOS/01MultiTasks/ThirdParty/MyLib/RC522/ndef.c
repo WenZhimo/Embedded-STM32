@@ -1,8 +1,11 @@
 #include "ndef.h"
+#include <stdio.h>
 
-#define NDEF_MAX_BUFFER_SIZE 256 
+#define NDEF_MAX_BUFFER_SIZE 2048 
 #define NDEF_START_BLOCK     4   
 
+//  NDEF 格式化设计的控制位：自由读写，且 GPB 强制为 0x40 (MAD v1)
+uint8_t CTRL_NDEF_FORMAT[4] = {0xFF, 0x07, 0x80, 0x40};
 
 /**
  * @brief  [内部函数] 获取操作特定块所需的密钥
@@ -186,7 +189,7 @@ int8_t NDEF_ReadFromCard(uint8_t *uid, NDEF_Message *msg)
     if (tlvOffset >= 15) return MI_FORMATERR; 
 
     uint8_t ndefLen = readBuf[tlvOffset + 1];
-    if (ndefLen == 0 || ndefLen > 100) return MI_FORMATERR; 
+    if (ndefLen == 0 || ndefLen > NDEF_MAX_BUFFER_SIZE) return MI_FORMATERR; 
 
     #ifdef M1_AUTO_HALT_ENABLE
     uint8_t tagType[2];
@@ -275,9 +278,9 @@ int8_t NDEF_FormatBlankCard(uint8_t *uid)
     uint8_t mad_trailer[16];
     
     // 生成 NDEF 扇区的控制块 (KeyA=D3F7..., KeyB=FFFF...)
-    Make_SectorTrailer(Key_NDEF, M1_DefaultKey, CTRL_FREE_DEV, ndef_trailer);
+    Make_SectorTrailer(Key_NDEF, M1_DefaultKey, CTRL_NDEF_FORMAT, ndef_trailer);
     // 生成 MAD 扇区的控制块 (KeyA=A0A1..., KeyB=FFFF...)
-    Make_SectorTrailer(Key_MAD,  M1_DefaultKey, CTRL_FREE_DEV, mad_trailer);
+    Make_SectorTrailer(Key_MAD,  M1_DefaultKey, CTRL_NDEF_FORMAT, mad_trailer);
 
     // 1. 写入 NFC Forum 规定的 MAD1 目录信息 (扇区 0)
     uint8_t mad_b1[16] = {0x14, 0x01, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1};
@@ -343,4 +346,167 @@ int8_t NDEF_FormatUniversal(uint8_t *uid)
     // 阶段 3：确认是出厂白卡,直接调用白卡格式化函数
     // ==========================================
     return NDEF_FormatBlankCard(uid);
+}
+
+
+/**
+ * @brief  [恢复出厂设置] 将 NDEF 卡或其他已知密码的卡彻底恢复为出厂白卡状态
+ * @param  uid: 4字节卡号
+ * @return MI_OK(成功), MI_ACCESSERR(未知密码卡，无法恢复), MI_ERR(底层错误)
+ */
+int8_t NDEF_FormatToBlankCard(uint8_t *uid)
+{
+    int8_t status;
+    uint8_t factory_trailer[16];
+    uint8_t empty_data[16] = {0}; // 全 0 数据，用于抹除残留特征
+
+    // 构造出厂默认的控制块：KeyA 和 KeyB 全是 0xFF，控制位为自由读写
+    Make_SectorTrailer(M1_DefaultKey, M1_DefaultKey, CTRL_FREE_DEV, factory_trailer);
+
+    // ==========================================
+    // 遍历所有 16 个扇区，逐一“洗白”
+    // ==========================================
+    for (uint8_t sector = 0; sector < 16; sector++)
+    {
+        // 确定该扇区在 NDEF 标准下的预期密码
+        uint8_t *expectedKey = (sector == 0) ? Key_MAD : Key_NDEF;
+
+        // 1. 先尝试用出厂密码验证 (可能它本身就是没被改过的白卡扇区)
+        M1_ForceWakeUp(uid);
+        status = M1_WriteSectorControlBlock_Safe(uid, sector, M1_DefaultKey, factory_trailer);
+
+        // 2. 如果出厂密码验证失败，说明密码被改过，尝试用预期的 NDEF 密码验证
+        if (status != MI_OK)
+        {
+            M1_ForceWakeUp(uid); // 验证失败会导致卡片休眠，必须强行唤醒！
+            status = M1_WriteSectorControlBlock_Safe(uid, sector, expectedKey, factory_trailer);
+
+            // 3. 如果还是不行，说明这是一张未知密码的加密卡，直接中止操作并报错
+            if (status != MI_OK) {
+                return MI_ACCESSERR;
+            }
+        }
+
+        // ==========================================
+        // 清理残余特征数据 (使用刚刚恢复好的 M1_DefaultKey)
+        // ==========================================
+        if (sector == 0) 
+        {
+            // 抹除 MAD 目录
+            M1_ForceWakeUp(uid); M1_WriteDataBlock_Abs(uid, 1, M1_DefaultKey, empty_data);
+            M1_ForceWakeUp(uid); M1_WriteDataBlock_Abs(uid, 2, M1_DefaultKey, empty_data);
+        }
+        else if (sector == 1) 
+        {
+            // 抹除 NDEF 头部
+            M1_ForceWakeUp(uid); M1_WriteDataBlock_Abs(uid, 4, M1_DefaultKey, empty_data);
+        }
+    }
+
+    return MI_OK;
+}
+
+
+// 测试函数：向卡片写入一条 URI 记录 (用于验证写入功能)
+void NDEF_Test_WriteToCard(uint8_t *uid){
+    //uint8_t CardType[2];
+    uint8_t CardUID[4];
+    int8_t status;
+
+    M1_ForceWakeUp(CardUID);
+
+    // 格式化卡片为NDEF空白卡
+    status=NDEF_FormatUniversal(CardUID);
+    if (status != MI_OK) {
+        printf("Failed to Format Card. Status Code: %d\r\n", status);
+    }else {
+        printf("Card Formatted Successfully!\r\n");
+    }
+    M1_ForceWakeUp(CardUID);
+    
+    NDEF_Message myNdefMsg;
+
+    // 1. 初始化空消息
+    NDEF_Message_Init(&myNdefMsg);
+    
+
+    // 2. 添加记录：让手机弹窗打开网页
+    NDEF_AddUriRecord(&myNdefMsg, URI_PREFIX_HTTPS_WWWDOT, "wenzhimo.xyz");
+
+    // 3. 添加记录：传递额外的文本信息
+    NDEF_AddTextRecord(&myNdefMsg, "zh", "这卡片支持多条NDEF。");
+
+    NDEF_AddTextRecord(&myNdefMsg, "zh", "如你所见，这些记录是在单片机上生成并写入的。");
+    NDEF_AddTextRecord(&myNdefMsg, "zh", "想要更多记录？");
+    NDEF_AddTextRecord(&myNdefMsg, "zh", "更多记录！");
+    NDEF_AddTextRecord(&myNdefMsg, "zh", "更多！！！");
+
+    // 4. 写入卡片 (会自动把上述两条记录打包并计算好头部 MB/ME 标志)
+    status = NDEF_WriteToCard(CardUID, &myNdefMsg);
+    
+    if (status == MI_OK) {
+        printf("NDEF Message Written Successfully!\r\n");
+    } else {
+        printf("Failed to Write NDEF Message. Status Code: %d\r\n", status);
+    }
+
+    // 操作完成后，让卡片休眠，防止一直重复读取
+    PcdHalt(); 
+
+}
+// 测试函数：从卡片读取 NDEF 消息并打印内容 (用于验证读取功能)
+void NDEF_Test_ReadFromCard(uint8_t *uid){
+    //uint8_t CardType[2];
+    uint8_t CardUID[4];
+    // 为了稳定，读取前先统一唤醒一次，杜绝死锁
+    M1_ForceWakeUp(CardUID);
+    
+    NDEF_Message readMsg;
+    
+    // 3. 从卡片读取 NDEF 消息
+    int8_t status = NDEF_ReadFromCard(CardUID, &readMsg);
+    
+    if (status == MI_OK) {
+        printf("NDEF Message Read Successfully!\r\n");
+        printf(">>> 当前卡片包含 %d 条记录 <<<\r\n", readMsg.recordCount);
+        printf("----------------------------------------\r\n");
+        
+        // 4. 遍历并解析打印每一条记录
+        for (uint8_t i = 0; i < readMsg.recordCount; i++) {
+            NDEF_Record *rec = &readMsg.records[i];
+            printf("[记录 %d] ", i + 1);
+            
+            if (rec->type == NDEF_TYPE_URI) {
+                // 还原 URI 的前缀
+                const char *prefix = "";
+                switch(rec->uriCode) {
+                    case URI_PREFIX_HTTP_WWWDOT:  prefix = "http://www."; break;
+                    case URI_PREFIX_HTTPS_WWWDOT: prefix = "https://www."; break;
+                    case URI_PREFIX_HTTP:         prefix = "http://"; break;
+                    case URI_PREFIX_HTTPS:        prefix = "https://"; break;
+                    default:                      prefix = ""; break;
+                }
+                
+                printf("类型: 网址 (URI)\r\n");
+                // %.*s 的用法：先传长度(payloadLength)，再传字符串指针(payload)
+                printf("          链接: %s%.*s\r\n", prefix, rec->payloadLength, rec->payload);
+            } 
+            else if (rec->type == NDEF_TYPE_TEXT) {
+                printf("类型: 文本 (Text)\r\n");
+                printf("          语言: %s\r\n", rec->language);
+                printf("          内容: %.*s\r\n", rec->payloadLength, rec->payload);
+            }
+        }
+        printf("----------------------------------------\r\n");
+    } 
+    else if (status == MI_NOTAGERR) {
+        printf("读取完成：这是一张 NDEF 卡，但里面是空的（无记录）。\r\n");
+    } 
+    else {
+        printf("Failed to Read NDEF Message. Status Code: %d\r\n", status);
+    }
+
+    // 5. 完美的退出三部曲，防止状态机死锁
+    PcdHalt(); 
+    PcdStopCrypto1(); 
 }

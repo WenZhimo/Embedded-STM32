@@ -158,30 +158,41 @@ void Update_RTC_Time(uint8_t year, uint8_t month, uint8_t date,
     RTC_TimeTypeDef sTime = {0};
     RTC_DateTypeDef sDate = {0};
 
+    // 1. 数值合法性粗筛
+    year%=100; // 只保留两位年份，适配 RTC 的 BCD 格式
     if(month < 1 || month > 12) return;
     if(date  < 1 || date  > 31) return;
     if(hour  > 23) return;
     if(min   > 59) return;
     if(sec   > 59) return;
 
+    // --- 必须在操作 RTC 之前解锁备份域！ ---
+    __HAL_RCC_PWR_CLK_ENABLE();
+    HAL_PWR_EnableBkUpAccess();
+    // ---------------------------------------------------
+
+    // 2. 配置并写入时间
     sTime.Hours = hour;
     sTime.Minutes = min;
     sTime.Seconds = sec;
     sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
     sTime.StoreOperation = RTC_STOREOPERATION_RESET;
-
+    
     HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+    
 
+    // 3. 配置并写入日期
     sDate.Year = year;
     sDate.Month = month;
     sDate.Date = date;
-    sDate.WeekDay = RTC_WEEKDAY_MONDAY;  // 可替换为计算函数
-
+    sDate.WeekDay = RTC_WEEKDAY_MONDAY;  // 必须赋值，否则也会报错
+    
     HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 
-    __HAL_RCC_PWR_CLK_ENABLE();
-    HAL_PWR_EnableBkUpAccess();
+    // 4. 写入备份寄存器标记位 (用于标记已设置过时间)
     HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0x32F4);
+
+    // 5. 重新锁上备份域 (好习惯，防止程序跑飞意外篡改 RTC)
     HAL_PWR_DisableBkUpAccess();
 }
 /* USER CODE END 1 */
