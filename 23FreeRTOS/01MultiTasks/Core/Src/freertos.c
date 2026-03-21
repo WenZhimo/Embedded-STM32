@@ -412,6 +412,7 @@ void AppTaskreadUSB(void *argument)
     EUBF_Init();
     uint8_t text_buffer[512];
     uint32_t br;
+    uint8_t first_draw = 0;
     
 
     /* 1. 定义一个 TCHAR 缓冲区用于存放转换后的文件名 */
@@ -421,7 +422,7 @@ void AppTaskreadUSB(void *argument)
 
     for(;;)
     {
-        if ( USB_Is_Mounted() )
+        if ( USB_Is_Mounted() && first_draw == 0)
         {
           //printf("1. usb mounted\r\n");
             /* 3. 使用转换后的 TCHAR 缓冲区调用接口 */
@@ -444,11 +445,12 @@ void AppTaskreadUSB(void *argument)
                                     
                 lcd_dma2d_show_eubf_str(0, 150, (char*)"诸行无常 是生灭法", 
                                     "字酷堂板桥体", 32, WHITE);
-                lcd_dma2d_show_eubf_str(0, 200, (char*)"30岁梦忆，50岁复梦忆，\n所梦或同，所忆错落矣。", 
+                lcd_dma2d_show_eubf_str(0, 200, (char*)"三十岁梦忆，五十岁复梦忆，\n所梦或同  ，  所忆错落矣。", 
                                     "华康金文体", 25, WHITE);
 
                 //printf("4. Calling Update Screen...\r\n");
                 lcd_dma2d_update_screen();
+                first_draw = 1;
                 
             }
         }

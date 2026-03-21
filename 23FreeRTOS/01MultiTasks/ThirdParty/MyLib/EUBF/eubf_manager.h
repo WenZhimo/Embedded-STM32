@@ -2,6 +2,9 @@
  ******************************************************************************
  * @file    eubf_manager.h
  * @brief   EUBF 字库管理器 (无状态架构版)
+ * @author  文止墨
+ * @date    2026-3-16
+ * @note    https://github.com/S-R-Afraid/Embedded-Unicode-Bitmap-Font-Format
  ******************************************************************************
  */
 #ifndef __EUBF_MANAGER_H
