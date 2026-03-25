@@ -8,18 +8,20 @@
 #include "eubf_manager.h"
 #include <string.h>
 #include <stdio.h>
-#include "../../ThirdParty/MyLib/USB/usb_app.h"
+
 
 /* 外部系统资源 */
-extern char USBHPath[4];
+
 extern uint32_t HAL_GetTick(void);
+
+
 
 /* ========================================================================= *
  * 内部函数声明
  * ========================================================================= */
 
-static uint32_t read_u32_le_safe(FIL* fp);
-static uint16_t read_u16_le_safe(FIL* fp);
+static uint32_t read_u32_le_safe(int8_t fd, uint32_t offset);
+static uint16_t read_u16_le_safe(int8_t fd, uint32_t offset);
 static const char* Translate_Font_Alias(const char *request_name);
 static int8_t Find_Available_Slot(void);
 static uint8_t UTF8_To_Unicode(const char *utf8_str, uint16_t *unicode);
@@ -30,7 +32,9 @@ static int8_t EUBF_Get_Or_Load_Slot(const char *font_name, uint8_t size);
  * 内部资源
  * ========================================================================= */
 
-static FIL s_internal_file_handles[EUBF_MAX_SLOTS];
+static EUBF_Port_Config_t s_io_port;  // 保存用户传入的底层接口
+
+static int8_t s_file_fds[EUBF_MAX_SLOTS]; // 存储底层返回的 fd (如 FastSlot 的槽位号)
 
 static uint8_t s_meta_temp_buf[16] __attribute__((aligned(4)));
 
@@ -99,21 +103,45 @@ static const EUBF_AliasMap g_font_aliases[] = {
 
 #define ALIAS_TABLE_SIZE (sizeof(g_font_aliases) / sizeof(g_font_aliases[0]))
 
-/* ========================================================================= *
- * 初始化
- * ========================================================================= */
 
-void EUBF_Init(void)
+/* ========================================================================= *
+ * 初始化 (依赖注入)
+ * ========================================================================= */
+void EUBF_Init(EUBF_Port_Config_t *config)
 {
+    if (config != NULL) {
+        s_io_port = *config; // 拷贝用户配置
+    }
+
     for (int i = 0; i < EUBF_MAX_SLOTS; i++)
     {
         g_eubf_slots[i].is_occupied = 0;
         s_slot_last_used_tick[i] = 0;
+        s_file_fds[i] = -1; 
     }
-
     s_last_matched_slot = -1;
 }
 
+
+/* ========================================================================= *
+ * 安全读取辅助函数 (改为 Offset-based 偏移量读取)
+ * ========================================================================= */
+static uint32_t read_u32_le_safe(int8_t fd, uint32_t offset)
+{
+    if (s_io_port.ReadAt(fd, offset, s_meta_temp_buf, 4) == 0) { // 0表示成功
+        return (uint32_t)(s_meta_temp_buf[0] | (s_meta_temp_buf[1] << 8) | 
+                          (s_meta_temp_buf[2] << 16) | (s_meta_temp_buf[3] << 24));
+    }
+    return 0xFFFFFFFF;
+}
+
+static uint16_t read_u16_le_safe(int8_t fd, uint32_t offset)
+{
+    if (s_io_port.ReadAt(fd, offset, s_meta_temp_buf, 2) == 0) {
+        return (uint16_t)(s_meta_temp_buf[0] | (s_meta_temp_buf[1] << 8));
+    }
+    return 0xFFFF;
+}
 /* ========================================================================= *
  * Slot 自动调度
  * ========================================================================= */
@@ -152,45 +180,37 @@ static int8_t EUBF_Get_Or_Load_Slot(const char *font_name, uint8_t size)
     }
 
     /* 查找可用 slot */
-
     int8_t slot_idx = Find_Available_Slot();
     EUBF_Slot *slot = &g_eubf_slots[slot_idx];
 
-    if (slot->is_occupied)
+    if (slot->is_occupied && s_file_fds[slot_idx] >= 0)
     {
-        f_close(&s_internal_file_handles[slot_idx]);
+        s_io_port.Close(s_file_fds[slot_idx]); // 使用用户接口关闭旧文件
+        s_file_fds[slot_idx] = -1;
         slot->is_occupied = 0;
     }
 
-    static char  path_utf8[128];
-    static TCHAR path_utf16[128];
+    // 拼接路径，使用动态注册的 RootPath
+    static char path_buf[128];
+    snprintf(path_buf, sizeof(path_buf), "%sasset/font/%s/%d.eubf", 
+             s_io_port.RootPath, actual_dir, size);
 
-    snprintf(path_utf8,
-             sizeof(path_utf8),
-             "%sasset/font/%s/%d.eubf",
-             USBHPath,
-             actual_dir,
-             size);
+    // 调用底层 Open 接口 (比如 USB_FastSlot_Open_UTF8)
+    int8_t fd = s_io_port.Open(path_buf);
+    if (fd < 0) return -1;
+    
+    s_file_fds[slot_idx] = fd; // 保存底层返回的句柄/槽位号
 
-    USB_Utils_UTF8ToUTF16(path_utf8, path_utf16, 128);
-
-    if (f_open(&s_internal_file_handles[slot_idx], path_utf16, FA_READ) != FR_OK)
-        return -1;
-
+    // 读取 Header (偏移量 0)
     EUBF_RawHeader head;
-    UINT br;
-
-    f_read(&s_internal_file_handles[slot_idx],
-           &head,
-           sizeof(EUBF_RawHeader),
-           &br);
-
-    if (br != sizeof(EUBF_RawHeader) ||
+    if (s_io_port.ReadAt(fd, 0, (uint8_t*)&head, sizeof(EUBF_RawHeader)) != 0 ||
         memcmp(head.magic, "EUBF", 4) != 0)
     {
-        f_close(&s_internal_file_handles[slot_idx]);
+        s_io_port.Close(fd);
+        s_file_fds[slot_idx] = -1;
         return -1;
     }
+
 
     strcpy(slot->font_name, actual_dir);
 
@@ -330,7 +350,7 @@ uint16_t EUBF_Get_Text_Width(const char *font_name,
  * USB 断开
  * ========================================================================= */
 
-void EUBF_Notify_USB_Disconnected(void)
+void EUBF_Notify_Disconnected(void)
 {
     for (int i = 0; i < EUBF_MAX_SLOTS; i++)
         g_eubf_slots[i].is_occupied = 0;
@@ -338,100 +358,56 @@ void EUBF_Notify_USB_Disconnected(void)
     s_last_matched_slot = -1;
 }
 
-/* ========================================================================= *
- * 安全读取
- * ========================================================================= */
 
-static uint32_t read_u32_le_safe(FIL* fp)
-{
-    UINT br;
-
-    if (f_read(fp, s_meta_temp_buf, 4, &br) != FR_OK || br != 4)
-        return 0xFFFFFFFF;
-
-    return (uint32_t)(
-        s_meta_temp_buf[0] |
-        (s_meta_temp_buf[1] << 8) |
-        (s_meta_temp_buf[2] << 16) |
-        (s_meta_temp_buf[3] << 24));
-}
-
-static uint16_t read_u16_le_safe(FIL* fp)
-{
-    UINT br;
-
-    if (f_read(fp, s_meta_temp_buf, 2, &br) != FR_OK || br != 2)
-        return 0xFFFF;
-
-    return (uint16_t)(
-        s_meta_temp_buf[0] |
-        (s_meta_temp_buf[1] << 8));
-}
 
 /* ========================================================================= *
- * 从磁盘读取 glyph
+ * 从磁盘读取 glyph (全面使用 ReadAt 接口)
  * ========================================================================= */
-
-static int8_t
-EUBF_Read_Glyph_From_Disk(EUBF_Slot *slot,
-                          uint16_t unicode,
-                          EUBF_GlyphCache *target_node)
+static int8_t EUBF_Read_Glyph_From_Disk(EUBF_Slot *slot, uint16_t unicode, EUBF_GlyphCache *target_node)
 {
     int8_t s_idx = (slot - g_eubf_slots);
-    FIL *fp = &s_internal_file_handles[s_idx];
+    int8_t fd = s_file_fds[s_idx]; // 获取绑定的底层文件槽位号
 
-    UINT br;
-
-    f_lseek(fp, slot->page_dir_offset + ((unicode >> 8) * 4));
-    uint32_t page_offset = read_u32_le_safe(fp);
-
+    // 1. 读 Page 偏移
+    uint32_t page_offset = read_u32_le_safe(fd, slot->page_dir_offset + ((unicode >> 8) * 4));
     uint16_t glyph_id = 0xFFFF;
 
-    if (page_offset != 0xFFFFFFFF)
-    {
-        f_lseek(fp, page_offset + ((unicode & 0xFF) * 2));
-        glyph_id = read_u16_le_safe(fp);
+    // 2. 读 Glyph ID
+    if (page_offset != 0xFFFFFFFF) {
+        glyph_id = read_u16_le_safe(fd, page_offset + ((unicode & 0xFF) * 2));
+    }
+    if (page_offset == 0xFFFFFFFF || glyph_id == 0xFFFF) {
+        glyph_id = slot->missing_glyph;
     }
 
-    if (page_offset == 0xFFFFFFFF || glyph_id == 0xFFFF)
-        glyph_id = slot->missing_glyph;
+    // 3. 读数据偏移
+    uint32_t rel_addr = read_u32_le_safe(fd, slot->glyph_offset_offset + (glyph_id * 4));
 
-    f_lseek(fp, slot->glyph_offset_offset + (glyph_id * 4));
-    uint32_t rel_addr = read_u32_le_safe(fp);
-
-    f_lseek(fp, slot->glyph_data_offset + rel_addr);
-
-    if (f_read(fp, s_meta_temp_buf, 8, &br) != FR_OK || br != 8)
+    // 4. 读 Glyph 头部信息 (8个字节)
+    if (s_io_port.ReadAt(fd, slot->glyph_data_offset + rel_addr, s_meta_temp_buf, 8) != 0) {
         return -1;
+    }
 
     target_node->box_w    = s_meta_temp_buf[0];
     target_node->box_h    = s_meta_temp_buf[1];
     target_node->x_offset = (int8_t)s_meta_temp_buf[2];
     target_node->y_offset = (int8_t)s_meta_temp_buf[3];
+    target_node->advance  = (uint16_t)(s_meta_temp_buf[4] | (s_meta_temp_buf[5] << 8));
 
-    target_node->advance =
-        (uint16_t)(s_meta_temp_buf[4] |
-        (s_meta_temp_buf[5] << 8));
+    if (target_node->box_h == 0 && target_node->advance == 0) return -1;
 
-    if (target_node->box_h == 0 &&
-        target_node->advance == 0)
-        return -1;
-
-    if (target_node->box_h > 0 &&
-        target_node->box_w > 0)
+    // 5. 读点阵数据
+    if (target_node->box_h > 0 && target_node->box_w > 0)
     {
-        uint32_t b_size =
-            ((target_node->box_w * slot->bpp + 7) / 8)
-            * target_node->box_h;
-
+        uint32_t b_size = ((target_node->box_w * slot->bpp + 7) / 8) * target_node->box_h;
         if (b_size > 0 && b_size <= EUBF_MAX_BITMAP_SIZE)
         {
-            if (f_read(fp, target_node->bitmap_data, b_size, &br) != FR_OK ||
-                br != b_size)
+            // 继续从上面读完8字节的偏移量往后读数据
+            if (s_io_port.ReadAt(fd, slot->glyph_data_offset + rel_addr + 8, target_node->bitmap_data, b_size) != 0) {
                 return -1;
+            }
         }
     }
-
     return 0;
 }
 

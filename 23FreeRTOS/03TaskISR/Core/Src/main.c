@@ -23,8 +23,8 @@
 #include "dma2d.h"
 #include "fatfs.h"
 #include "rtc.h"
+#include "sdio.h"
 #include "usart.h"
-#include "usb_host.h"
 #include "gpio.h"
 #include "fmc.h"
 
@@ -35,6 +35,7 @@
 #include "../../ThirdParty/MyLib/LCD/lcd.h"
 #include "../../ThirdParty/MyLib/SDRAM/sdram.h"
 #include "../../ThirdParty/MyLib/LCD/lcd_dma2d.h"
+#include "../../ThirdParty/MyLib/TFCARD/sd_app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -104,6 +105,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_RTC_Init();
   MX_DMA2D_Init();
+  MX_SDIO_SD_Init();
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
@@ -131,7 +133,13 @@ int main(void)
   lcd_dma2d_update_screen(); // 刷新屏幕
 
   /* ============================= 初始化EUBF  ============================= */
-  EUBF_Init();
+    EUBF_Port_Config_t font_sd_config = {
+        .Open     = SD_FastSlot_Open_UTF8,  // 完美的接口匹配！
+        .Close    = (void (*)(int8_t))SD_FastSlot_Close, // 强转一下避免警告
+        .ReadAt   = SD_FastSlot_Read,       // 完美的参数匹配！
+        .RootPath = "0:/"                   // SD卡的根目录
+    };
+    EUBF_Init(&font_sd_config);
   /** ============================= 初始化串口 ============================= */
   //开启串口空闲中断，接收数据到rx_buffer
   HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rx_buffer_1, MAX_CMD_LEN);

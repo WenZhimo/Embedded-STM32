@@ -34,10 +34,9 @@
 #include "rtc.h"
 #include "../../ThirdParty/MyLib/CLI/cli.h"
 #include "../../ThirdParty/MyLib/CLI/cli_fun.h"
-#include "../../ThirdParty/MyLib/USB/usb_app.h"
-extern ApplicationTypeDef Appli_state;
 #include "../../ThirdParty/MyLib/EUBF/eubf_manager.h"
 #include "../../ThirdParty/MyLib/LCD/lcd_dma2d.h"
+#include "../../ThirdParty/MyLib/TFCARD/sd_app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -91,28 +90,23 @@ const osThreadAttr_t Task_LCDTime_attributes = {
   .stack_size = sizeof(Task_LCDTimeBuffer),
   .priority = (osPriority_t) osPriorityLow,
 };
-/* Definitions for TaskInitUSB */
-osThreadId_t TaskInitUSBHandle;
-uint32_t TaskUSBBuffer[ 512 ];
-osStaticThreadDef_t TaskUSBControlBlock;
-const osThreadAttr_t TaskInitUSB_attributes = {
-  .name = "TaskInitUSB",
-  .cb_mem = &TaskUSBControlBlock,
-  .cb_size = sizeof(TaskUSBControlBlock),
-  .stack_mem = &TaskUSBBuffer[0],
-  .stack_size = sizeof(TaskUSBBuffer),
-  .priority = (osPriority_t) osPriorityLow,
-};
-/* Definitions for TaskreadUSB */
-osThreadId_t TaskreadUSBHandle;
-uint32_t TaskreadUSBBuffer[ 512 ];
+/* Definitions for TaskreadSD */
+osThreadId_t TaskreadSDHandle;
+uint32_t TaskreadUSBBuffer[ 1024 ];
 osStaticThreadDef_t TaskreadUSBControlBlock;
-const osThreadAttr_t TaskreadUSB_attributes = {
-  .name = "TaskreadUSB",
+const osThreadAttr_t TaskreadSD_attributes = {
+  .name = "TaskreadSD",
   .cb_mem = &TaskreadUSBControlBlock,
   .cb_size = sizeof(TaskreadUSBControlBlock),
   .stack_mem = &TaskreadUSBBuffer[0],
   .stack_size = sizeof(TaskreadUSBBuffer),
+  .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for TaskInitSD */
+osThreadId_t TaskInitSDHandle;
+const osThreadAttr_t TaskInitSD_attributes = {
+  .name = "TaskInitSD",
+  .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
 
@@ -124,10 +118,9 @@ const osThreadAttr_t TaskreadUSB_attributes = {
 void AppTask_LEDR(void *argument);
 void AppTask_usart1(void *argument);
 void AppTask_LCDTime(void *argument);
-void AppTaskInitUSB(void *argument);
-void AppTaskreadUSB(void *argument);
+void AppTaskreadSD(void *argument);
+void AppTaskInitSD(void *argument);
 
-extern void MX_USB_HOST_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
 /* Hook prototypes */
@@ -183,11 +176,11 @@ void MX_FREERTOS_Init(void) {
   /* creation of Task_LCDTime */
   Task_LCDTimeHandle = osThreadNew(AppTask_LCDTime, NULL, &Task_LCDTime_attributes);
 
-  /* creation of TaskInitUSB */
-  TaskInitUSBHandle = osThreadNew(AppTaskInitUSB, NULL, &TaskInitUSB_attributes);
+  /* creation of TaskreadSD */
+  TaskreadSDHandle = osThreadNew(AppTaskreadSD, NULL, &TaskreadSD_attributes);
 
-  /* creation of TaskreadUSB */
-  TaskreadUSBHandle = osThreadNew(AppTaskreadUSB, NULL, &TaskreadUSB_attributes);
+  /* creation of TaskInitSD */
+  TaskInitSDHandle = osThreadNew(AppTaskInitSD, NULL, &TaskInitSD_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -208,13 +201,18 @@ void MX_FREERTOS_Init(void) {
 /* USER CODE END Header_AppTask_LEDR */
 void AppTask_LEDR(void *argument)
 {
-  /* init code for USB_HOST */
-  MX_USB_HOST_Init();
   /* USER CODE BEGIN AppTask_LEDR */
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+  const TickType_t xFrequency = pdMS_TO_TICKS( 1000 );
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    LEDR(1);
+    //lcd_fill(0, 100, 20, 120, !HAL_GPIO_ReadPin(LEDR_GPIO_Port, LEDR_Pin)?RED:BLACK);
+    osDelay(50);
+    LEDR(0);
+    //lcd_fill(0, 100, 20, 120, !HAL_GPIO_ReadPin(LEDR_GPIO_Port, LEDR_Pin)?RED:BLACK);
+    vTaskDelayUntil( &xLastWakeTime, xFrequency );
   }
   /* USER CODE END AppTask_LEDR */
 }
@@ -297,81 +295,82 @@ void AppTask_LCDTime(void *argument)
   /* USER CODE END AppTask_LCDTime */
 }
 
-/* USER CODE BEGIN Header_AppTaskInitUSB */
+/* USER CODE BEGIN Header_AppTaskreadSD */
 /**
-* @brief Function implementing the TaskInitUSB thread.
+* @brief Function implementing the TaskreadSD thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_AppTaskInitUSB */
-void AppTaskInitUSB(void *argument)
+/* USER CODE END Header_AppTaskreadSD */
+void AppTaskreadSD(void *argument)
 {
-  /* USER CODE BEGIN AppTaskInitUSB */
-  /* Infinite loop */
-  // 直接调用我们封装好的后台管理线程！
-  // 这个函数内部自带死循环和 osDelay，会永远在这里面运行并管理 U 盘的拔插。
-  USB_App_Thread(argument);
-  /* USER CODE END AppTaskInitUSB */
-}
+  /* USER CODE BEGIN AppTaskreadSD */
 
-/* USER CODE BEGIN Header_AppTaskreadUSB */
-/**
-* @brief Function implementing the TaskreadUSB thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_AppTaskreadUSB */
-void AppTaskreadUSB(void *argument)
-{
-  /* USER CODE BEGIN AppTaskreadUSB */
-   EUBF_Init();
-    uint8_t text_buffer[512];
+    
+    static uint8_t text_buffer[512];
     uint32_t br;
     uint8_t first_draw = 0;
     
-
-    /* 1. 定义一个 TCHAR 缓冲区用于存放转换后的文件名 */
+    /* 2. 定义一个 TCHAR 缓冲区用于存放转换后的文件名 */
     TCHAR w_filename[32]; 
-    /* 2. 转换文件名 */
-    USB_Utils_UTF8ToUTF16("usbtest.txt", w_filename, 32);
+    
+    /* 3. 转换文件名 */
+    SD_Utils_UTF8ToUTF16("usbtest.txt", w_filename, 32);
 
     for(;;)
     {
-        if ( USB_Is_Mounted() && first_draw == 0)
+        printf("0. start: %d\r\n", SD_Is_Mounted());
+        // 4. 判断 SD 卡是否挂载成功
+        if ( SD_Is_Mounted() && first_draw == 0)
         {
-          //printf("1. usb mounted\r\n");
-            /* 3. 使用转换后的 TCHAR 缓冲区调用接口 */
-            if (USB_Read_File(w_filename, text_buffer, sizeof(text_buffer) - 1, &br) == 0)
+            printf("1. sd mounted\r\n");
+            
+            /* 5. 读取 SD 卡中的文本文件 */
+            if (SD_Read_File(w_filename, text_buffer, sizeof(text_buffer) - 1, &br) == 0)
             {
-                
                 text_buffer[br] = '\0'; 
-                //printf("2. file read success,read: %s\r\n", text_buffer);
-
-                //uint16_t test_h = EUBF_Get_Line_Height("峄山碑篆体", 32);
-                //printf("[Debug] Font Line Height: %d\r\n", test_h);
+                printf("2. file read success, read: %s\r\n", text_buffer);
                 
                 lcd_dma2d_clear(BLACK); 
-                // 显示文件内容
+                
+                // 显示 SD 卡读取出来的文件内容
                 lcd_dma2d_show_eubf_str(0, 50, (char*)text_buffer, 
                                     "峄山碑篆体", 32, WHITE);
-                // 显示测试字符串
+                                    
+                // 显示测试字符串 (由于前面注入了 font_sd_config，这里会自动去 SD 卡读字库)
                 lcd_dma2d_show_eubf_str(0, 100, (char*)"This is a test.",
                                     "Megrim", 32, WHITE);
                                     
                 lcd_dma2d_show_eubf_str(0, 150, (char*)"诸行无常 是生灭法", 
                                     "字酷堂板桥体", 32, WHITE);
+                                    
                 lcd_dma2d_show_eubf_str(0, 200, (char*)"三十岁梦忆，五十岁复梦忆，\n所梦或同  ，  所忆错落矣。", 
                                     "华康金文体", 25, WHITE);
 
-                //printf("4. Calling Update Screen...\r\n");
+                printf("4. Calling Update Screen...\r\n");
                 lcd_dma2d_update_screen();
-                first_draw = 1;
                 
+                first_draw = 1;
             }
         }
         osDelay(5000); 
     }
-  /* USER CODE END AppTaskreadUSB */
+  /* USER CODE END AppTaskreadSD */
+}
+
+/* USER CODE BEGIN Header_AppTaskInitSD */
+/**
+* @brief Function implementing the TaskInitSD thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_AppTaskInitSD */
+void AppTaskInitSD(void *argument)
+{
+  /* USER CODE BEGIN AppTaskInitSD */
+  /* Infinite loop */
+  SD_App_Thread();
+  /* USER CODE END AppTaskInitSD */
 }
 
 /* Private application code --------------------------------------------------*/

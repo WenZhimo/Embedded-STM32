@@ -25,16 +25,16 @@
 
 #include "ff.h"
 #include "ff_gen_drv.h"
-#include "usbh_diskio.h" /* defines USBH_Driver as external */
+#include "sd_diskio.h" /* defines SD_Driver as external */
 
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
 
-extern uint8_t retUSBH; /* Return value for USBH */
-extern char USBHPath[4]; /* USBH logical drive path */
-extern FATFS USBHFatFS; /* File system object for USBH logical drive */
-extern FIL USBHFile; /* File object for USBH */
+extern uint8_t retSD; /* Return value for SD */
+extern char SDPath[4]; /* SD logical drive path */
+extern FATFS SDFatFS; /* File system object for SD logical drive */
+extern FIL SDFile; /* File object for SD */
 
 void MX_FATFS_Init(void);
 

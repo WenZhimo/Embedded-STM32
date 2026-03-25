@@ -11,7 +11,7 @@
 #define __EUBF_MANAGER_H
 
 #include <stdint.h>
-#include "ff.h"            
+//#include "ff.h"            
 #include "../../ThirdParty/MyLib/SDRAM/sdram.h" 
 
 #define EUBF_MAX_SLOTS        10    
@@ -58,11 +58,43 @@ typedef struct {
 /* 指向 SDRAM 的基地址指针 */
 #define g_eubf_slots ((EUBF_Slot *)EUBF_CACHE_BASE_ADDR)
 
+
 /* ========================================================================= *
- * 核心对外 API (无状态，上层直接索要资源)
+ * 底层 IO 移植接口定义 (由用户实现并注册)
+ * ========================================================================= */
+typedef struct {
+    /** * @brief 打开文件接口
+     * @return 返回文件描述符(fd)或者槽位号(>=0)，失败返回 -1
+     */
+    int8_t  (*Open)(const char *path);
+    
+    /** * @brief 关闭文件接口
+     */
+    void    (*Close)(int8_t fd);
+    
+    /** * @brief 绝对偏移量读取接口 (对齐你的 FastSlot_Read 逻辑)
+     * @return 0: 成功，其他: 失败
+     */
+    uint8_t (*ReadAt)(int8_t fd, uint32_t offset, uint8_t *buf, uint32_t len);
+    
+    /**
+     * @brief 根目录路径 (例如 "0:/" 代表 SD卡，"1:/" 代表 U盘)
+     */
+    const char *RootPath; 
+} EUBF_Port_Config_t;
+
+
+/* ========================================================================= *
+ * 核心对外 API
  * ========================================================================= */
 
-void EUBF_Init(void);
+/**
+ * @brief 初始化管理器并注册底层 IO 接口
+ * @param config 用户配置的底层 IO 函数指针结构体
+ */
+void EUBF_Init(EUBF_Port_Config_t *config);
+
+
 
 /**
  * @brief 直接获取字形信息 (底层自动完成加载、切换、LRU 淘汰与 U 盘读取)
@@ -82,6 +114,6 @@ uint16_t EUBF_Get_Text_Width(const char *font_name, uint8_t size, const char *st
 /**
  * @brief U 盘断开时的紧急清理与安全切断
  */
-void EUBF_Notify_USB_Disconnected(void);
+void EUBF_Notify_Disconnected(void);
 
 #endif /* __EUBF_MANAGER_H */

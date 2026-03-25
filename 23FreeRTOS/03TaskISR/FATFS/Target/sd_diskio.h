@@ -1,8 +1,8 @@
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
-  * @file    usbh_diskio.h (based on usbh_diskio_template.h v2.0.2)
-  * @brief   Header for usbh_diskio.c module
+  * @file    sd_diskio.h
+  * @brief   Header for sd_diskio.c module
   ******************************************************************************
   * @attention
   *
@@ -16,25 +16,26 @@
   ******************************************************************************
   */
 /* USER CODE END Header */
+
+/* Note: code generation based on sd_diskio_dma_rtos_template.h */
+
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __USBH_DISKIO_H
-#define __USBH_DISKIO_H
+#ifndef __SD_DISKIO_H
+#define __SD_DISKIO_H
 
 /* USER CODE BEGIN firstSection */
 /* can be used to modify / undefine following code or add new definitions */
 /* USER CODE END firstSection */
 
 /* Includes ------------------------------------------------------------------*/
-#include "usbh_core.h"
-#include "usbh_msc.h"
+#include "bsp_driver_sd.h"
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
-extern const Diskio_drvTypeDef  USBH_Driver;
+extern const Diskio_drvTypeDef  SD_Driver;
 
 /* USER CODE BEGIN lastSection */
 /* can be used to modify / undefine previous code or add new definitions */
 /* USER CODE END lastSection */
 
-#endif /* __USBH_DISKIO_H */
-
+#endif /* __SD_DISKIO_H */
