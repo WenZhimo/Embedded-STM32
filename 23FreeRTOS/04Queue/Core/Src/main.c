@@ -112,11 +112,7 @@ int main(void)
   lcd_clear(BLACK);
   lcd_dma2d_init();     // 初始化 DMA2D 缓存模块
   lcd_dma2d_clear(BLACK);
-  //============================== 初始化 SD 卡  =============================
-  // if(SD_Init_Wait_Mount() == 0){  // 等待 SD 卡挂载完成,这里就不单开一个任务了
-  //   // 挂载失败，处理错误情况
-  //   printf("SD Card Mount Failed!\r\n");
-  // }
+
   // ============================= 初始化EUBF  ============================= 
     EUBF_Port_Config_t font_sd_config = {
         .Open     = SD_FastSlot_Open_UTF8,  // 完美的接口匹配！

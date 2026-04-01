@@ -7,4 +7,5 @@
 #include "EUBF/eubf_manager.h"
 #include "USART/myusart.h"
 #include "RTC/myRTC.h"
+#include "KEY/mykey.h"
 #include <stdio.h>
