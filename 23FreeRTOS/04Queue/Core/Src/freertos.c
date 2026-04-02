@@ -183,8 +183,12 @@ void AppTask_SYS_INIT(void *argument)
   {
     SD_Mount_StateMachine();
     if(SD_Is_Mounted() == 1){
-      printf("SD Card Mounted Successfully!\r\n");
-      lcd_dma2d_show_eubf_str(0, 32, (char*)"诸行无常 是生灭法", "字酷堂板桥体", 32, WHITE);
+      //printf("SD Card Mounted Successfully!\r\n");
+      char  queuename[64];
+      sprintf(queuename, "Queue_name: %s", pcQueueGetQueueName(Queue_KeysHandle));
+      lcd_dma2d_show_eubf_str(0, 12, (char*)queuename, "余繁新语", 12, WHITE);
+      sprintf(queuename, "Queue length: %d", uxQueueSpacesAvailable(Queue_KeysHandle));
+      lcd_dma2d_show_eubf_str(0, 24, (char*)queuename, "余繁新语", 12, WHITE);
       lcd_dma2d_update_screen();
       vTaskDelete(NULL);
     }
@@ -226,20 +230,22 @@ void App_Task_Draw(void *argument)
   uint8_t  line_count = 0;          // 记录当前屏幕上已经打印了多少行
   uint16_t current_y = 0;           // 记录当前准备打印的 Y 坐标
   
-  const uint16_t START_Y = 32;      // 第一行文字的起始 Y 坐标
-  const uint16_t LINE_SPACING = 40; // 行距（字体是32，行距设为40能留出8像素的清爽空白）
-  const uint16_t FONT_SIZE = 32;    // 字体大小
-
-  // 任务开始前，先给屏幕刷个黑底，防止有杂色
-  lcd_dma2d_clear(BLACK);
-  lcd_dma2d_update_screen();
-
+  const uint16_t START_Y = 24;      // 第一行文字的起始 Y 坐标
+  const uint16_t LINE_SPACING = 26; // 行距（字体是24，行距设为26能留出2像素的清爽空白）
+  const uint16_t FONT_SIZE = 24;    // 字体大小
+  uint8_t is_first_message = 1; // 标志位，记录是否是第一条消息
   /* Infinite loop */
   for(;;)
   {
     // 阻塞等待队列消息
     if (xQueueReceive(Queue_KeysHandle, &msg, portMAX_DELAY) == pdTRUE)
     {
+        if(is_first_message) {
+            // 收到第一条消息时，清屏并重置行计数器
+            lcd_dma2d_clear(BLACK);
+            line_count = 0;
+            is_first_message = 0; // 设置标志位，后续消息不再清屏
+        }
         // 判断是否需要清屏（满 9 条则清空）
         if (line_count >= 9) 
         {
@@ -255,29 +261,29 @@ void App_Task_Draw(void *argument)
         {
             case KEY0:
                 if (msg.event == KEY_EVENT_PRESS) {
-                    lcd_dma2d_show_eubf_str(0, current_y, (char*)"KEY0: 按顺序排队进来的", "字酷堂板桥体", FONT_SIZE, WHITE);
+                    lcd_dma2d_show_eubf_str(0, current_y, (char*)"KEY0: 按顺序", "字酷堂板桥体", FONT_SIZE, WHITE);
                 } 
                 else if (msg.event == KEY_EVENT_LONG_PRESS) {
-                    lcd_dma2d_show_eubf_str(0, current_y, (char*)"KEY0: 长按触发！", "字酷堂板桥体", FONT_SIZE, YELLOW);
+                    lcd_dma2d_show_eubf_str(0, current_y, (char*)"KEY0: 长按！", "字酷堂板桥体", FONT_SIZE, YELLOW);
                 }
                 break;
 
             case KEY1:
                 if (msg.event == KEY_EVENT_PRESS) {
-                    lcd_dma2d_show_eubf_str(0, current_y, (char*)"KEY1: 诸行无常 是生灭法", "字酷堂板桥体", FONT_SIZE, WHITE);
+                    lcd_dma2d_show_eubf_str(0, current_y, (char*)"KEY1: 按顺序", "字酷堂板桥体", FONT_SIZE, WHITE);
                 }
                 break;
 
             case KEY2:
                 if (msg.event == KEY_EVENT_PRESS) {
-                    lcd_dma2d_show_eubf_str(0, current_y, (char*)"KEY2: 按顺序排队进来的", "字酷堂板桥体", FONT_SIZE, WHITE);
+                    lcd_dma2d_show_eubf_str(0, current_y, (char*)"KEY2: 按顺序", "字酷堂板桥体", FONT_SIZE, WHITE);
                 }
                 break;
 
             case KEY_UP:
                 if (msg.event == KEY_EVENT_PRESS) {
                     // KEY_UP 是高优先级的插队消息，换红色
-                    lcd_dma2d_show_eubf_str(0, current_y, (char*)"KEY_UP: 我插队啦！！！", "字酷堂板桥体", FONT_SIZE, RED); 
+                    lcd_dma2d_show_eubf_str(0, current_y, (char*)"KEY_UP: 插队啦", "字酷堂板桥体", FONT_SIZE, RED); 
                 }
                 break;
 
