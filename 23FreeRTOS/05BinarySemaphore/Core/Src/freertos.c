@@ -19,6 +19,8 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
+#include "portmacro.h"
+#include "stm32f4xx_hal_adc.h"
 #include "task.h"
 #include "main.h"
 #include "cmsis_os.h"
@@ -26,6 +28,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "../../ThirdParty/MyLib/myinclude.h"
+#include "adc.h"
+#include "semphr.h"
+#include <stdint.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,7 +50,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-
+uint32_t adc_value = 0;
 /* USER CODE END Variables */
 /* Definitions for Task_SYS_INIT */
 osThreadId_t Task_SYS_INITHandle;
@@ -187,6 +192,19 @@ void App_Task_showADC(void *argument)
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
+  if(hadc->Instance == ADC1){
+    adc_value = HAL_ADC_GetValue(hadc);
+    //printf("ADC Conversion Completed!\r\n");
+    BaseType_t highter_priority_task_woken = pdFALSE;
+    if(BinarySem_DataReadyHandle != NULL){// 确保信号量已创建
+      // 释放信号量，通知显示任务数据已准备好
+      xSemaphoreGiveFromISR(BinarySem_DataReadyHandle, &highter_priority_task_woken);
+      portYIELD_FROM_ISR(highter_priority_task_woken);
+    }
+    
 
+  }
+}
 /* USER CODE END Application */
 
