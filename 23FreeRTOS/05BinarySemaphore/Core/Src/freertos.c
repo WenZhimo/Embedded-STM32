@@ -25,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "../../ThirdParty/MyLib/myinclude.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -154,6 +154,14 @@ void AppTask_SYS_INIT(void *argument)
   /* Infinite loop */
   for(;;)
   {
+    SD_Mount_StateMachine();
+    if(SD_Is_Mounted() == 1){
+      //printf("SD Card Mounted Successfully!\r\n");
+      
+      lcd_dma2d_show_eubf_str(0, 32, (char*)"诸行无常，是生灭法", "字酷堂板桥体", 32, WHITE);
+      lcd_dma2d_update_screen();
+      vTaskDelete(NULL);
+    }
     osDelay(1);
   }
   /* USER CODE END AppTask_SYS_INIT */
