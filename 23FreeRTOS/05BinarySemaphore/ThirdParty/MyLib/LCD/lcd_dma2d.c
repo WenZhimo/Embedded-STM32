@@ -59,7 +59,7 @@ void lcd_buffer_draw_point(uint16_t x, uint16_t y, uint16_t color)
 void lcd_dma2d_clear(uint16_t color)
 {
     /* 调用矩形填充接口，范围是整个屏幕 */
-    lcd_dma2d_fill(0, 0, lcddev.width - 1, lcddev.height - 1, color);
+    lcd_dma2d_fill(0, 0, lcddev.width, lcddev.height, color);
 }
 
 /**
@@ -71,8 +71,8 @@ void lcd_dma2d_clear(uint16_t color)
  */
 void lcd_dma2d_fill(uint16_t sx, uint16_t sy, uint16_t ex, uint16_t ey, uint16_t color)
 {
-    uint32_t width = ex - sx + 1;
-    uint32_t height = ey - sy + 1;
+    uint32_t width = ex - sx ;
+    uint32_t height = ey - sy ;
     uint32_t offline = lcddev.width - width; // 行偏移
     
     /* 计算起始绝对地址 */

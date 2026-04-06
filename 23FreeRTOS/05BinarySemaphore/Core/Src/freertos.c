@@ -19,8 +19,6 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
-#include "portmacro.h"
-#include "stm32f4xx_hal_adc.h"
 #include "task.h"
 #include "main.h"
 #include "cmsis_os.h"
@@ -28,9 +26,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "../../ThirdParty/MyLib/myinclude.h"
-#include "adc.h"
+#include "rtc.h"
 #include "semphr.h"
-#include <stdint.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,19 +54,31 @@ osThreadId_t Task_SYS_INITHandle;
 const osThreadAttr_t Task_SYS_INIT_attributes = {
   .name = "Task_SYS_INIT",
   .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityRealtime7,
+  .priority = (osPriority_t) osPriorityRealtime,
 };
 /* Definitions for Task_showADC */
 osThreadId_t Task_showADCHandle;
 const osThreadAttr_t Task_showADC_attributes = {
   .name = "Task_showADC",
-  .stack_size = 128 * 4,
+  .stack_size = 200 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for Task_CheckIn */
+osThreadId_t Task_CheckInHandle;
+const osThreadAttr_t Task_CheckIn_attributes = {
+  .name = "Task_CheckIn",
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
 /* Definitions for BinarySem_DataReady */
 osSemaphoreId_t BinarySem_DataReadyHandle;
 const osSemaphoreAttr_t BinarySem_DataReady_attributes = {
   .name = "BinarySem_DataReady"
+};
+/* Definitions for CountingSem_Table */
+osSemaphoreId_t CountingSem_TableHandle;
+const osSemaphoreAttr_t CountingSem_Table_attributes = {
+  .name = "CountingSem_Table"
 };
 
 /* Private function prototypes -----------------------------------------------*/
@@ -79,6 +88,7 @@ const osSemaphoreAttr_t BinarySem_DataReady_attributes = {
 
 void AppTask_SYS_INIT(void *argument);
 void App_Task_showADC(void *argument);
+void App_Task_CheckIn(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -117,6 +127,9 @@ void MX_FREERTOS_Init(void) {
   /* creation of BinarySem_DataReady */
   BinarySem_DataReadyHandle = osSemaphoreNew(1, 0, &BinarySem_DataReady_attributes);
 
+  /* creation of CountingSem_Table */
+  CountingSem_TableHandle = osSemaphoreNew(5, 5, &CountingSem_Table_attributes);
+
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
@@ -135,6 +148,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of Task_showADC */
   Task_showADCHandle = osThreadNew(App_Task_showADC, NULL, &Task_showADC_attributes);
+
+  /* creation of Task_CheckIn */
+  Task_CheckInHandle = osThreadNew(App_Task_CheckIn, NULL, &Task_CheckIn_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -163,11 +179,11 @@ void AppTask_SYS_INIT(void *argument)
     if(SD_Is_Mounted() == 1){
       //printf("SD Card Mounted Successfully!\r\n");
       
-      lcd_dma2d_show_eubf_str(0, 32, (char*)"诸行无常，是生灭法", "字酷堂板桥体", 32, WHITE);
+      lcd_dma2d_show_eubf_str(0, 32, (char*)"信号量实验", "ZCOOL QingKe HuangYou", 25, WHITE);
       lcd_dma2d_update_screen();
       vTaskDelete(NULL);
     }
-    osDelay(1);
+    //osDelay(1);
   }
   /* USER CODE END AppTask_SYS_INIT */
 }
@@ -185,9 +201,90 @@ void App_Task_showADC(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    // 等待数据准备就绪
+    if(xSemaphoreTake(BinarySem_DataReadyHandle, portMAX_DELAY) == pdTRUE){
+      // 数据已准备好，继续执行
+      // 显示ADC值
+      char adc_str[16];
+      // 格式化输出，保留4位
+      snprintf(adc_str, sizeof(adc_str), "%04lu", adc_value);
+      lcd_dma2d_show_eubf_str(0, 64,(char*)"ADC Value:", "ZCOOL QingKe HuangYou", 32, WHITE);
+      lcd_dma2d_fill(0, 64, 160, 98, BLACK);
+      lcd_dma2d_show_eubf_str(0, 96,(char*)adc_str, "ZCOOL QingKe HuangYou", 32, WHITE);
+      lcd_dma2d_update_screen();
+      osDelay(1);
+    }
+    else{
+      // 数据未准备好，等待
+    }
+    osDelay(250);
+    
   }
   /* USER CODE END App_Task_showADC */
+}
+
+/* USER CODE BEGIN Header_App_Task_CheckIn */
+/**
+* @brief Function implementing the Task_CheckIn thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_App_Task_CheckIn */
+void App_Task_CheckIn(void *argument)
+{
+  /* USER CODE BEGIN App_Task_CheckIn */
+  char temp_str[30];
+  UBaseType_t last_count = 0xFFFFFFFF; 
+  UBaseType_t current_count = 0;
+
+  osDelay(1500); 
+
+  sprintf(temp_str, "%lu", uxSemaphoreGetCount(CountingSem_TableHandle));
+  
+  // 第一行：Y=32 (0~32)
+  lcd_dma2d_show_eubf_str(160, 32, (char*)"TOTAL_TABLE:", "ZCOOL QingKe HuangYou", 25, WHITE);
+  // 第二行：Y=64 (32~64)
+  lcd_dma2d_show_eubf_str(160, 64, temp_str, "ZCOOL QingKe HuangYou", 32, WHITE);
+  // 第三行：Y=96 (64~96)
+  lcd_dma2d_show_eubf_str(160, 96, (char*)"AVAILABLE:", "ZCOOL QingKe HuangYou", 32, WHITE);
+  
+  // 第一次推送到屏幕
+  lcd_dma2d_update_screen();
+
+  /* Infinite loop */
+  for(;;)
+  {
+    // 按键处理
+    if(myGetKeyPressStateByID(KEY_UP)){
+      // 清除第五行 (占据 128~160)
+      lcd_dma2d_fill(160, 128, 320, 160+1, BLACK); 
+      
+      if(xSemaphoreTake(CountingSem_TableHandle, 100) == pdTRUE){
+        lcd_dma2d_show_eubf_str(160, 160, (char*)"CheckIn OK", "ZCOOL QingKe HuangYou", 25, GREEN);
+      } else {
+        lcd_dma2d_show_eubf_str(160, 160, (char*)"CheckIn Failed", "ZCOOL QingKe HuangYou", 25, RED);
+      }
+      lcd_dma2d_update_screen();
+    }
+
+    // 按需刷新
+    current_count = uxSemaphoreGetCount(CountingSem_TableHandle);
+    if(current_count != last_count)
+    {
+      sprintf(temp_str, "%lu", (unsigned long)current_count);
+      
+      // 清除第四行 (占据 96~128)
+      lcd_dma2d_fill(160, 96, 320, 128+1, BLACK); 
+      // 绘制第四行数字
+      lcd_dma2d_show_eubf_str(160, 128, temp_str, "ZCOOL QingKe HuangYou", 32, WHITE);
+      
+      lcd_dma2d_update_screen();
+      last_count = current_count;
+    }
+    
+    osDelay(100);
+  }
+  /* USER CODE END App_Task_CheckIn */
 }
 
 /* Private application code --------------------------------------------------*/
@@ -204,6 +301,16 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
     }
     
 
+  }
+}
+
+void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc){
+  // 这里可以添加定时器事件处理代码
+  //释放计数信号量
+  if(CountingSem_TableHandle != NULL){ // 确保信号量已创建
+    BaseType_t highter_priority_task_woken = pdFALSE;
+    xSemaphoreGiveFromISR(CountingSem_TableHandle, &highter_priority_task_woken);
+    portYIELD_FROM_ISR(highter_priority_task_woken);
   }
 }
 /* USER CODE END Application */

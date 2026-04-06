@@ -58,6 +58,7 @@
 extern ADC_HandleTypeDef hadc1;
 extern DMA_HandleTypeDef hdma_memtomem_dma2_stream0;
 extern DMA2D_HandleTypeDef hdma2d;
+extern RTC_HandleTypeDef hrtc;
 extern DMA_HandleTypeDef hdma_sdio_rx;
 extern DMA_HandleTypeDef hdma_sdio_tx;
 extern SD_HandleTypeDef hsd;
@@ -164,6 +165,20 @@ void DebugMon_Handler(void)
 /* For the available peripheral interrupt handler names,                      */
 /* please refer to the startup file (startup_stm32f4xx.s).                    */
 /******************************************************************************/
+
+/**
+  * @brief This function handles RTC wake-up interrupt through EXTI line 22.
+  */
+void RTC_WKUP_IRQHandler(void)
+{
+  /* USER CODE BEGIN RTC_WKUP_IRQn 0 */
+
+  /* USER CODE END RTC_WKUP_IRQn 0 */
+  HAL_RTCEx_WakeUpTimerIRQHandler(&hrtc);
+  /* USER CODE BEGIN RTC_WKUP_IRQn 1 */
+
+  /* USER CODE END RTC_WKUP_IRQn 1 */
+}
 
 /**
   * @brief This function handles ADC1, ADC2 and ADC3 global interrupts.
