@@ -19,6 +19,8 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
+#include "portmacro.h"
+#include "stm32f4xx_hal.h"
 #include "task.h"
 #include "main.h"
 #include "cmsis_os.h"
@@ -28,6 +30,7 @@
 #include "../../ThirdParty/MyLib/myinclude.h"
 #include "rtc.h"
 #include "semphr.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -70,10 +73,36 @@ const osThreadAttr_t Task_CheckIn_attributes = {
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
+/* Definitions for Task_Middle */
+osThreadId_t Task_MiddleHandle;
+const osThreadAttr_t Task_Middle_attributes = {
+  .name = "Task_Middle",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for Task_Low */
+osThreadId_t Task_LowHandle;
+const osThreadAttr_t Task_Low_attributes = {
+  .name = "Task_Low",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for Task_High */
+osThreadId_t Task_HighHandle;
+const osThreadAttr_t Task_High_attributes = {
+  .name = "Task_High",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityHigh,
+};
 /* Definitions for BinarySem_DataReady */
 osSemaphoreId_t BinarySem_DataReadyHandle;
 const osSemaphoreAttr_t BinarySem_DataReady_attributes = {
   .name = "BinarySem_DataReady"
+};
+/* Definitions for token */
+osSemaphoreId_t tokenHandle;
+const osSemaphoreAttr_t token_attributes = {
+  .name = "token"
 };
 /* Definitions for CountingSem_Table */
 osSemaphoreId_t CountingSem_TableHandle;
@@ -89,6 +118,9 @@ const osSemaphoreAttr_t CountingSem_Table_attributes = {
 void AppTask_SYS_INIT(void *argument);
 void App_Task_showADC(void *argument);
 void App_Task_CheckIn(void *argument);
+void App_Task_Middle(void *argument);
+void App_Task_Low(void *argument);
+void App_Task_High(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -127,6 +159,9 @@ void MX_FREERTOS_Init(void) {
   /* creation of BinarySem_DataReady */
   BinarySem_DataReadyHandle = osSemaphoreNew(1, 0, &BinarySem_DataReady_attributes);
 
+  /* creation of token */
+  tokenHandle = osSemaphoreNew(1, 1, &token_attributes);
+
   /* creation of CountingSem_Table */
   CountingSem_TableHandle = osSemaphoreNew(5, 5, &CountingSem_Table_attributes);
 
@@ -151,6 +186,15 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of Task_CheckIn */
   Task_CheckInHandle = osThreadNew(App_Task_CheckIn, NULL, &Task_CheckIn_attributes);
+
+  /* creation of Task_Middle */
+  Task_MiddleHandle = osThreadNew(App_Task_Middle, NULL, &Task_Middle_attributes);
+
+  /* creation of Task_Low */
+  Task_LowHandle = osThreadNew(App_Task_Low, NULL, &Task_Low_attributes);
+
+  /* creation of Task_High */
+  Task_HighHandle = osThreadNew(App_Task_High, NULL, &Task_High_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -179,7 +223,7 @@ void AppTask_SYS_INIT(void *argument)
     if(SD_Is_Mounted() == 1){
       //printf("SD Card Mounted Successfully!\r\n");
       
-      lcd_dma2d_show_eubf_str(0, 32, (char*)"信号量实验", "ZCOOL QingKe HuangYou", 25, WHITE);
+      lcd_dma2d_show_eubf_str(0, 32, (char*)"互斥量实验", "ZCOOL QingKe HuangYou", 25, WHITE);
       lcd_dma2d_update_screen();
       vTaskDelete(NULL);
     }
@@ -285,6 +329,78 @@ void App_Task_CheckIn(void *argument)
     osDelay(100);
   }
   /* USER CODE END App_Task_CheckIn */
+}
+
+/* USER CODE BEGIN Header_App_Task_Middle */
+/**
+* @brief Function implementing the Task_Middle thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_App_Task_Middle */
+void App_Task_Middle(void *argument)
+{
+  /* USER CODE BEGIN App_Task_Middle */
+  /* Infinite loop */
+  for(;;)
+  {
+    printf("MIDDLE IS RUNING...\r\n");
+    HAL_Delay(10);
+    osDelay(500);
+  }
+  /* USER CODE END App_Task_Middle */
+}
+
+/* USER CODE BEGIN Header_App_Task_Low */
+/**
+* @brief Function implementing the Task_Low thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_App_Task_Low */
+void App_Task_Low(void *argument)
+{
+  /* USER CODE BEGIN App_Task_Low */
+  /* Infinite loop */
+  for(;;)
+  {
+    if(xSemaphoreTake(tokenHandle,pdMS_TO_TICKS(300)) == pdTRUE){
+      // 成功获取到 token，执行临界区代码
+      printf("LOW TAKE IT!\r\n");
+      HAL_Delay(1000);
+      printf("LOW GIVE IT!\r\n");
+      HAL_Delay(10);
+      xSemaphoreGive(tokenHandle); // 释放 token
+    } else {
+      // 获取 token 失败，可能被 Task_High 占用
+      
+    }
+    osDelay(20);
+  }
+  /* USER CODE END App_Task_Low */
+}
+
+/* USER CODE BEGIN Header_App_Task_High */
+/**
+* @brief Function implementing the Task_High thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_App_Task_High */
+void App_Task_High(void *argument)
+{
+  /* USER CODE BEGIN App_Task_High */
+  /* Infinite loop */
+  for(;;)
+  {
+    if(xSemaphoreTake(tokenHandle,portMAX_DELAY) == pdTRUE){
+      printf("HIGH TAKE IT!\r\n");
+      HAL_Delay(10);
+      xSemaphoreGive(tokenHandle);
+    }
+    osDelay(1);
+  }
+  /* USER CODE END App_Task_High */
 }
 
 /* Private application code --------------------------------------------------*/

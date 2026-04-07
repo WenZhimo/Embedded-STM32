@@ -6,4 +6,5 @@
 #include "TFCARD/sd_app.h"
 #include "EUBF/eubf_manager.h"
 #include "KEY/mykey.h"
+#include "USART/myusart.h"
 #include <stdio.h>
