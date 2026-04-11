@@ -5,6 +5,7 @@
 
 对于`22STM32G4_GPIO_MOTOR`及以后的项目，学习笔记可在[语雀知识库-嵌入式](https://www.yuque.com/g/wenzhimo/qianrushi/collaborator/join?token=jJbeqT6BIV3fngcc&source=book_collaborator)中查看；也可以在[我的博客-嵌入式分类](https://www.wenzhimo.xyz/category/article/programing/%e5%b5%8c%e5%85%a5%e5%bc%8f/)中查看。
 
+你可能会看到commit里有很多名为“同步”的提交，这是因为学生党使用两台不同的电脑进行开发，会将代码从本地仓库同步到远程仓库，以保持代码的最新版本。不使用远程桌面是因为校园网太差了。
 
 ## 使用 VS Code 开发 STM32
 

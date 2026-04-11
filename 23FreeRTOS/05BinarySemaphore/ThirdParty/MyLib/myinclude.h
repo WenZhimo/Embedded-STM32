@@ -7,4 +7,6 @@
 #include "EUBF/eubf_manager.h"
 #include "KEY/mykey.h"
 #include "USART/myusart.h"
+#include "FreeRTOS/myfreertos.h"
+
 #include <stdio.h>

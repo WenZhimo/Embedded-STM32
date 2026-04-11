@@ -19,8 +19,6 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
-#include "portmacro.h"
-#include "stm32f4xx_hal.h"
 #include "task.h"
 #include "main.h"
 #include "cmsis_os.h"
@@ -30,7 +28,10 @@
 #include "../../ThirdParty/MyLib/myinclude.h"
 #include "rtc.h"
 #include "semphr.h"
+#include "event_groups.h"
+#include <stdint.h>
 #include <stdio.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,19 +52,20 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 uint32_t adc_value = 0;
+
 /* USER CODE END Variables */
 /* Definitions for Task_SYS_INIT */
 osThreadId_t Task_SYS_INITHandle;
 const osThreadAttr_t Task_SYS_INIT_attributes = {
   .name = "Task_SYS_INIT",
-  .stack_size = 512 * 4,
+  .stack_size = 1024 * 4,
   .priority = (osPriority_t) osPriorityRealtime,
 };
 /* Definitions for Task_showADC */
 osThreadId_t Task_showADCHandle;
 const osThreadAttr_t Task_showADC_attributes = {
   .name = "Task_showADC",
-  .stack_size = 200 * 4,
+  .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
 /* Definitions for Task_CheckIn */
@@ -108,6 +110,11 @@ const osSemaphoreAttr_t token_attributes = {
 osSemaphoreId_t CountingSem_TableHandle;
 const osSemaphoreAttr_t CountingSem_Table_attributes = {
   .name = "CountingSem_Table"
+};
+/* Definitions for xSystemInitEventGroup */
+osEventFlagsId_t xSystemInitEventGroupHandle;
+const osEventFlagsAttr_t xSystemInitEventGroup_attributes = {
+  .name = "xSystemInitEventGroup"
 };
 
 /* Private function prototypes -----------------------------------------------*/
@@ -200,6 +207,10 @@ void MX_FREERTOS_Init(void) {
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
 
+  /* Create the event(s) */
+  /* creation of xSystemInitEventGroup */
+  xSystemInitEventGroupHandle = osEventFlagsNew(&xSystemInitEventGroup_attributes);
+
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
   /* USER CODE END RTOS_EVENTS */
@@ -213,21 +224,14 @@ void MX_FREERTOS_Init(void) {
   * @retval None
   */
 /* USER CODE END Header_AppTask_SYS_INIT */
-void AppTask_SYS_INIT(void *argument)
+__weak void AppTask_SYS_INIT(void *argument)
 {
   /* USER CODE BEGIN AppTask_SYS_INIT */
   /* Infinite loop */
   for(;;)
   {
-    SD_Mount_StateMachine();
-    if(SD_Is_Mounted() == 1){
-      //printf("SD Card Mounted Successfully!\r\n");
-      
-      lcd_dma2d_show_eubf_str(0, 32, (char*)"互斥量实验", "ZCOOL QingKe HuangYou", 25, WHITE);
-      lcd_dma2d_update_screen();
-      vTaskDelete(NULL);
-    }
-    //osDelay(1);
+    
+    osDelay(1);
   }
   /* USER CODE END AppTask_SYS_INIT */
 }
@@ -242,6 +246,19 @@ void AppTask_SYS_INIT(void *argument)
 void App_Task_showADC(void *argument)
 {
   /* USER CODE BEGIN App_Task_showADC */
+  //等待ADC初始化完成、定时器3初始化完成、SD卡挂载完成、EUBF初始化完成、DMA2D初始化完成、LCD初始化完成
+  xEventGroupWaitBits(xSystemInitEventGroupHandle, 
+                        SYSTEM_INIT_EVENT_ADC_READY | 
+                        SYSTEM_INIT_EVENT_TIM3_READY | 
+                        SYSTEM_INIT_EVENT_SD_MOUNTED | 
+                        SYSTEM_INIT_EVENT_EUBF_READY | 
+                        SYSTEM_INIT_EVENT_DMA2D_READY | 
+                        SYSTEM_INIT_EVENT_LCD_READY, 
+                        pdFALSE,
+                        pdTRUE,
+                        portMAX_DELAY);
+
+  lcd_dma2d_show_eubf_str(0, 64,(char*)"ADC Value:", "ZCOOL QingKe HuangYou", 32, WHITE);
   /* Infinite loop */
   for(;;)
   {
@@ -252,16 +269,13 @@ void App_Task_showADC(void *argument)
       char adc_str[16];
       // 格式化输出，保留4位
       snprintf(adc_str, sizeof(adc_str), "%04lu", adc_value);
-      lcd_dma2d_show_eubf_str(0, 64,(char*)"ADC Value:", "ZCOOL QingKe HuangYou", 32, WHITE);
+      
       lcd_dma2d_fill(0, 64, 160, 98, BLACK);
       lcd_dma2d_show_eubf_str(0, 96,(char*)adc_str, "ZCOOL QingKe HuangYou", 32, WHITE);
       lcd_dma2d_update_screen();
       osDelay(1);
     }
-    else{
-      // 数据未准备好，等待
-    }
-    osDelay(250);
+    osDelay(1);
     
   }
   /* USER CODE END App_Task_showADC */
@@ -277,6 +291,16 @@ void App_Task_showADC(void *argument)
 void App_Task_CheckIn(void *argument)
 {
   /* USER CODE BEGIN App_Task_CheckIn */
+  //等待SD卡挂载完成、EUBF初始化完成、DMA2D初始化完成、LCD初始化完成
+  xEventGroupWaitBits(xSystemInitEventGroupHandle, 
+                        SYSTEM_INIT_EVENT_SD_MOUNTED | 
+                        SYSTEM_INIT_EVENT_EUBF_READY | 
+                        SYSTEM_INIT_EVENT_DMA2D_READY | 
+                        SYSTEM_INIT_EVENT_LCD_READY, 
+                        pdFALSE,
+                        pdTRUE,
+                        portMAX_DELAY);
+
   char temp_str[30];
   UBaseType_t last_count = 0xFFFFFFFF; 
   UBaseType_t current_count = 0;
@@ -298,6 +322,7 @@ void App_Task_CheckIn(void *argument)
   /* Infinite loop */
   for(;;)
   {
+    
     // 按键处理
     if(myGetKeyPressStateByID(KEY_UP)){
       // 清除第五行 (占据 128~160)
@@ -327,6 +352,8 @@ void App_Task_CheckIn(void *argument)
     }
     
     osDelay(100);
+    
+
   }
   /* USER CODE END App_Task_CheckIn */
 }
@@ -341,6 +368,12 @@ void App_Task_CheckIn(void *argument)
 void App_Task_Middle(void *argument)
 {
   /* USER CODE BEGIN App_Task_Middle */
+  //等待串口1初始化完成
+  xEventGroupWaitBits(xSystemInitEventGroupHandle, 
+                        SYSTEM_INIT_EVENT_USART1_READY, 
+                        pdFALSE,
+                        pdTRUE,
+                        portMAX_DELAY);
   /* Infinite loop */
   for(;;)
   {
@@ -361,9 +394,17 @@ void App_Task_Middle(void *argument)
 void App_Task_Low(void *argument)
 {
   /* USER CODE BEGIN App_Task_Low */
+  //等待串口1初始化完成
+  xEventGroupWaitBits(xSystemInitEventGroupHandle, 
+                        SYSTEM_INIT_EVENT_USART1_READY, 
+                        pdFALSE,
+                        pdTRUE,
+                        portMAX_DELAY);
   /* Infinite loop */
   for(;;)
   {
+    //进入临界区
+    
     if(xSemaphoreTake(tokenHandle,pdMS_TO_TICKS(300)) == pdTRUE){
       // 成功获取到 token，执行临界区代码
       printf("LOW TAKE IT!\r\n");
@@ -390,6 +431,12 @@ void App_Task_Low(void *argument)
 void App_Task_High(void *argument)
 {
   /* USER CODE BEGIN App_Task_High */
+  //等待串口1初始化完成
+  xEventGroupWaitBits(xSystemInitEventGroupHandle, 
+                        SYSTEM_INIT_EVENT_USART1_READY, 
+                        pdFALSE,
+                        pdTRUE,
+                        portMAX_DELAY);
   /* Infinite loop */
   for(;;)
   {

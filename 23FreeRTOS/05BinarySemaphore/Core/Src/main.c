@@ -107,27 +107,7 @@ int main(void)
   MX_RTC_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  //==============================  初始化 SDRAM  =============================
-  SDRAM_InitSequence();
-  // ============================= 初始化 LCD 屏幕 ============================= 
-  lcd_init();
-  lcd_clear(BLACK);
-  lcd_dma2d_init();     // 初始化 DMA2D 缓存模块
-  lcd_dma2d_clear(BLACK);
-
-  // ============================= 初始化EUBF ============================= 
-    EUBF_Port_Config_t font_sd_config = {
-        .Open     = SD_FastSlot_Open_UTF8,  // 完美的接口匹配！
-        .Close    = (void (*)(int8_t))SD_FastSlot_Close, // 强转一下避免警告
-        .ReadAt   = SD_FastSlot_Read,       // 完美的参数匹配！
-        .RootPath = "0:/"                   // SD卡的根目录
-    };
-    EUBF_Init(&font_sd_config);
-
-  //============================== 启动ADC1转换 =============================
-  HAL_ADC_Start_IT(&hadc1);
-  //============================== 启动定时器3 =============================
-  HAL_TIM_Base_Start(&htim3);
+  //初始化内容在myfreertos.c的AppTask_SYS_INIT任务中实现
   /* USER CODE END 2 */
 
   /* Init scheduler */

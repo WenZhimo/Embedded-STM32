@@ -3,6 +3,7 @@
 "00base\main.o"
 "00base\gpio.o"
 "00base\freertos.o"
+"00base\usart.o"
 "00base\stm32f1xx_it.o"
 "00base\stm32f1xx_hal_msp.o"
 "00base\stm32f1xx_hal_timebase_tim.o"
@@ -19,6 +20,7 @@
 "00base\stm32f1xx_hal_flash.o"
 "00base\stm32f1xx_hal_flash_ex.o"
 "00base\stm32f1xx_hal_exti.o"
+"00base\stm32f1xx_hal_uart.o"
 "00base\system_stm32f1xx.o"
 "00base\croutine.o"
 "00base\event_groups.o"
@@ -30,7 +32,7 @@
 "00base\cmsis_os2.o"
 "00base\heap_4.o"
 "00base\port.o"
---strict --scatter "00BASE\00BASE.sct"
+--library_type=microlib --strict --scatter "00BASE\00BASE.sct"
 --summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers
 --list "00BASE.map" -o 00BASE\00BASE.axf

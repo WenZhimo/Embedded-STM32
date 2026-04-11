@@ -27,6 +27,7 @@
 00base\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h
 00base\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h
 00base\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h
+00base\main.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
 00base\main.o: ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os.h
 00base\main.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h
 00base\main.o: ../Core/Inc/FreeRTOSConfig.h
@@ -38,4 +39,5 @@
 00base\main.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h
 00base\main.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/list.h
 00base\main.o: ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h
+00base\main.o: ../Core/Inc/usart.h
 00base\main.o: ../Core/Inc/gpio.h

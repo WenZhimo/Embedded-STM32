@@ -25,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -58,7 +58,7 @@ const osThreadAttr_t defaultTask_attributes = {
 osThreadId_t myTask_LED_RHandle;
 const osThreadAttr_t myTask_LED_R_attributes = {
   .name = "myTask_LED_R",
-  .stack_size = 128 * 4,
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
 
@@ -153,6 +153,7 @@ __weak void myTask_LED_R_f(void *argument)
   /* Infinite loop */
   for(;;)
   {
+      printf("lib05\n");
       HAL_GPIO_TogglePin(LED_R_GPIO_Port, LED_R_Pin);
       osDelay(500);
   }
