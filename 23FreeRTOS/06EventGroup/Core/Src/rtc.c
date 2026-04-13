@@ -83,7 +83,7 @@ void MX_RTC_Init(void)
   /** Enable the WakeUp
   */
   __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
-  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 2, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
+  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 1, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
   {
     Error_Handler();
   }

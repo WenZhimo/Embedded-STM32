@@ -224,14 +224,13 @@ void App_Task_showADC(void *argument)
                         pdFALSE,
                         pdTRUE,
                         portMAX_DELAY);
-  
+
+  lcd_dma2d_show_eubf_str(0, 32,(char*)"ADC Value:", "BoutiqueBitmap7x7_Circle_Dot", 30, WHITE);
   // 等待应用启动完成
   xEventGroupSync(xAppStartEventGroupHandle,
                   1 << 0, // APP_START_EVENT_SHOW_ADC_READY
-                  1 << 0|1 << 1, // APP_START_EVENT_SHOW_ADC_READY | APP_START_EVENT_SHOW_CHECKIN_READY
+                  (1 << 0)|(1 << 1), // APP_START_EVENT_SHOW_ADC_READY | APP_START_EVENT_SHOW_CHECKIN_READY
                   portMAX_DELAY);
-
-  lcd_dma2d_show_eubf_str(0, 64,(char*)"ADC Value:", "ZCOOL QingKe HuangYou", 32, WHITE);
   /* Infinite loop */
   for(;;)
   {
@@ -242,9 +241,11 @@ void App_Task_showADC(void *argument)
       char adc_str[16];
       // 格式化输出，保留4位
       snprintf(adc_str, sizeof(adc_str), "%04lu", adc_value);
+      // 转换为RGB565颜色
+      uint16_t rgb565 = (uint16_t)((((adc_value >> 8) & 0xF) * 0x21 << 10) | (((adc_value >> 4) & 0xF) * 0x44 << 4) | ((adc_value & 0xF) * 0x21 >> 4));
       
-      lcd_dma2d_fill(0, 64, 160, 98, BLACK);
-      lcd_dma2d_show_eubf_str(0, 96,(char*)adc_str, "ZCOOL QingKe HuangYou", 32, WHITE);
+      lcd_dma2d_fill(0, 32, 160, 65, BLACK);
+      lcd_dma2d_show_eubf_str(0, 64,(char*)adc_str, "BoutiqueBitmap7x7_Circle_Dot", 32, rgb565);
       lcd_dma2d_update_screen();
       osDelay(1);
     }
@@ -274,11 +275,7 @@ void App_Task_CheckIn(void *argument)
                         pdTRUE,
                         portMAX_DELAY);
 
-  // 等待应用启动完成
-  xEventGroupSync(xAppStartEventGroupHandle,
-                  1 << 1, // APP_START_EVENT_SHOW_CHECKIN_READY
-                  1 << 0|1 << 1, // APP_START_EVENT_SHOW_ADC_READY | APP_START_EVENT_SHOW_CHECKIN_READY
-                  portMAX_DELAY);
+  
   char temp_str[30];
   UBaseType_t last_count = 0xFFFFFFFF; 
   UBaseType_t current_count = 0;
@@ -287,12 +284,17 @@ void App_Task_CheckIn(void *argument)
 
   sprintf(temp_str, "%lu", uxSemaphoreGetCount(CountingSem_TableHandle));
   
+  // 等待应用启动完成
+  xEventGroupSync(xAppStartEventGroupHandle,
+                  1 << 1, // APP_START_EVENT_SHOW_CHECKIN_READY
+                  (1 << 0)|(1 << 1), // APP_START_EVENT_SHOW_ADC_READY | APP_START_EVENT_SHOW_CHECKIN_READY
+                  portMAX_DELAY);
   // 第一行：Y=32 (0~32)
-  lcd_dma2d_show_eubf_str(160, 32, (char*)"TOTAL_TABLE:", "ZCOOL QingKe HuangYou", 25, WHITE);
+  lcd_dma2d_show_eubf_str(160, 32, (char*)"TOTAL_TABLE:", "BoutiqueBitmap7x7_Scan_Line", 22, YELLOW);
   // 第二行：Y=64 (32~64)
-  lcd_dma2d_show_eubf_str(160, 64, temp_str, "ZCOOL QingKe HuangYou", 32, WHITE);
+  lcd_dma2d_show_eubf_str(160, 64, temp_str, "BoutiqueBitmap7x7_Scan_Line", 32, YELLOW);
   // 第三行：Y=96 (64~96)
-  lcd_dma2d_show_eubf_str(160, 96, (char*)"AVAILABLE:", "ZCOOL QingKe HuangYou", 32, WHITE);
+  lcd_dma2d_show_eubf_str(160, 96, (char*)"AVAILABLE:", "BoutiqueBitmap7x7_Scan_Line", 24, RED);
   
   // 第一次推送到屏幕
   lcd_dma2d_update_screen();
@@ -307,9 +309,9 @@ void App_Task_CheckIn(void *argument)
       lcd_dma2d_fill(160, 128, 320, 160+1, BLACK); 
       
       if(xSemaphoreTake(CountingSem_TableHandle, 100) == pdTRUE){
-        lcd_dma2d_show_eubf_str(160, 160, (char*)"CheckIn OK", "ZCOOL QingKe HuangYou", 25, GREEN);
+        lcd_dma2d_show_eubf_str(160, 160, (char*)"CheckIn OK", "BoutiqueBitmap7x7_Scan_Line", 24, GREEN);
       } else {
-        lcd_dma2d_show_eubf_str(160, 160, (char*)"CheckIn Failed", "ZCOOL QingKe HuangYou", 25, RED);
+        lcd_dma2d_show_eubf_str(160, 160, (char*)"CheckIn Failed", "BoutiqueBitmap7x7_Scan_Line", 24, RED);
       }
       lcd_dma2d_update_screen();
     }
@@ -323,7 +325,7 @@ void App_Task_CheckIn(void *argument)
       // 清除第四行 (占据 96~128)
       lcd_dma2d_fill(160, 96, 320, 128+1, BLACK); 
       // 绘制第四行数字
-      lcd_dma2d_show_eubf_str(160, 128, temp_str, "ZCOOL QingKe HuangYou", 32, WHITE);
+      lcd_dma2d_show_eubf_str(160, 128, temp_str, "BoutiqueBitmap7x7_Scan_Line", 32, current_count?GREEN:RED);
       
       lcd_dma2d_update_screen();
       last_count = current_count;
