@@ -1,5 +1,6 @@
 
 # STM32 学习项目展示
+其它类似仓库：[controllerstech/STM32-HAL](https://github.com/controllerstech/STM32-HAL)
 ![Stone Badge](https://stone.professorlee.work/api/stone/WenZhimo/Embedded-STM32)
 ## 学习笔记查看
 对于`21KaoQingSystem_Server`及以前的的项目，学习笔记包含在对应外设代码文件中。
