@@ -14,9 +14,27 @@
 //#include "ff.h"            
 #include "../../ThirdParty/MyLib/SDRAM/sdram.h" 
 
-#define EUBF_MAX_SLOTS        10    
-#define EUBF_MAX_CACHE_NODES  256   
-#define EUBF_MAX_BITMAP_SIZE  2048  
+  
+/* ========================================================================= *
+ * 内存池大小动态计算配置
+ * ========================================================================= */
+// 系统需要支持的极限参数
+#define EUBF_MAX_FONT_SIZE   40   // 允许的最大字号 (比如 40px)
+#define EUBF_MAX_BPP         4    // 允许的最大位深度 (比如 4bpp 的抗锯齿)
+
+
+//一些花体字符会超出标准的字符框，需要预留空间，避免缓存溢出和数据损坏
+// 预留溢出空间：假设极端的字符会比标称字号宽/高出 8 个像素
+#define EUBF_SAFE_MAX_W      (EUBF_MAX_FONT_SIZE + 8)
+#define EUBF_SAFE_MAX_H      (EUBF_MAX_FONT_SIZE + 8)
+
+// 最大 Bitmap 尺寸
+#define EUBF_MAX_BITMAP_SIZE ((((EUBF_SAFE_MAX_W) * (EUBF_MAX_BPP) + 7) / 8) * (EUBF_SAFE_MAX_H))
+//最大槽位数
+#define EUBF_MAX_SLOTS        10
+//最大缓存节点数
+#define EUBF_MAX_CACHE_NODES  256 
+
 
 #define EUBF_OK               0
 #define EUBF_ERR_NO_FILE      -1    

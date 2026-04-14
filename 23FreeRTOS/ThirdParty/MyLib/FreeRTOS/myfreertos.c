@@ -67,7 +67,10 @@ void AppTask_SYS_INIT(void *argument)
     SD_Mount_StateMachine();
     if(SD_Is_Mounted() == 1){
       // SD卡挂载成功，在LCD上显示实验标题
-      lcd_dma2d_show_eubf_str(0, 32, (char*)"事件组实验", "ZCOOL QingKe HuangYou", 25, WHITE);
+      lcd_dma2d_show_eubf_str(0, 435, (char*)"事件组实验", "BoutiqueBitmap7x7_Scan_Line", 12, Auqamarin);
+      lcd_dma2d_show_eubf_str(270, 435, (char*)"文于止墨", "BoutiqueBitmap7x7_Scan_Line", 12, Auqamarin);
+      lcd_dma2d_show_eubf_str(0, 450, (char*)"Event Group\nExperiment", "3x3等宽monospace", 12, Auqamarin);
+      lcd_dma2d_show_eubf_str(210, 450, (char*)" WenZhimo\n@20260412", "3x3等宽monospace", 12, Auqamarin);
       lcd_dma2d_update_screen();
       xEventGroupSetBits(xSystemInitEventGroupHandle, SYSTEM_INIT_EVENT_SD_MOUNTED);
     }

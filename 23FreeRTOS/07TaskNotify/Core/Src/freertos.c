@@ -19,7 +19,6 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
-#include "projdefs.h"
 #include "task.h"
 #include "main.h"
 #include "cmsis_os.h"
@@ -52,7 +51,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-uint32_t adc_value = 0;
+//uint32_t adc_value = 0;
 
 /* USER CODE END Variables */
 /* Definitions for Task_SYS_INIT */
@@ -75,16 +74,6 @@ const osThreadAttr_t Task_CheckIn_attributes = {
   .name = "Task_CheckIn",
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
-};
-/* Definitions for BinarySem_DataReady */
-osSemaphoreId_t BinarySem_DataReadyHandle;
-const osSemaphoreAttr_t BinarySem_DataReady_attributes = {
-  .name = "BinarySem_DataReady"
-};
-/* Definitions for CountingSem_Table */
-osSemaphoreId_t CountingSem_TableHandle;
-const osSemaphoreAttr_t CountingSem_Table_attributes = {
-  .name = "CountingSem_Table"
 };
 /* Definitions for xSystemInitEventGroup */
 osEventFlagsId_t xSystemInitEventGroupHandle;
@@ -138,13 +127,6 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
-
-  /* Create the semaphores(s) */
-  /* creation of BinarySem_DataReady */
-  BinarySem_DataReadyHandle = osSemaphoreNew(1, 0, &BinarySem_DataReady_attributes);
-
-  /* creation of CountingSem_Table */
-  CountingSem_TableHandle = osSemaphoreNew(5, 5, &CountingSem_Table_attributes);
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
@@ -294,7 +276,7 @@ void App_Task_CheckIn(void *argument)
   // 第一行：Y=32 (0~32)
   lcd_dma2d_show_eubf_str(160, 32, (char*)"TOTAL_TABLE:", "BoutiqueBitmap7x7_Scan_Line", 22, YELLOW);
   // 第二行：Y=64 (32~64)
-  lcd_dma2d_show_eubf_str(160, 64, "无限个！∞!", "BoutiqueBitmap7x7_Scan_Line", 32, GREEN);
+  lcd_dma2d_show_eubf_str(160, 64, "无限!∞!", "BoutiqueBitmap7x7_Scan_Line", 32, GREEN);
   // 第三行：Y=96 (64~96)
   lcd_dma2d_show_eubf_str(160, 96, (char*)"AVAILABLE:", "BoutiqueBitmap7x7_Scan_Line", 24, RED);
   

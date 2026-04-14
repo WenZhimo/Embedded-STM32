@@ -36,11 +36,13 @@ static EUBF_Port_Config_t s_io_port;  // 保存用户传入的底层接口
 
 static int8_t s_file_fds[EUBF_MAX_SLOTS]; // 存储底层返回的 fd (如 FastSlot 的槽位号)
 
-static uint8_t s_meta_temp_buf[16] __attribute__((aligned(4)));
+uint8_t s_meta_temp_buf[16] __attribute__((aligned(4)));// 临时缓冲区，用于存储字体元数据的缓存
 
-static uint32_t s_slot_last_used_tick[EUBF_MAX_SLOTS] = {0};
+static uint32_t s_slot_last_used_tick[EUBF_MAX_SLOTS] = {0};// 每个槽位的最后使用时间戳，用于LRU替换
 
-static int8_t s_last_matched_slot = -1;
+static int8_t s_last_matched_slot = -1;// 最后匹配的槽位索引，用于LRU替换
+
+static uint32_t s_lru_logic_tick = 0; // 全局LRU逻辑时钟
 
 /* ========================================================================= *
  * EUBF Header
@@ -327,51 +329,40 @@ EUBF_Get_Glyph(const char *font_name,
 
     // 初始化最久未使用时间戳和当前时间戳
     uint32_t oldest_tick = 0xFFFFFFFF;
-    uint32_t current_tick = HAL_GetTick();
+    //uint32_t current_tick = HAL_GetTick();
 
     // 遍历缓存池，查找目标Unicode字符
     for (int i = 0; i < EUBF_MAX_CACHE_NODES; i++)
     {
-        // 缓存命中：找到目标Unicode字符
+        // 缓存命中
         if (slot->cache_pool[i].unicode == unicode)
         {
-            // 更新最后使用时间
-            slot->cache_pool[i].last_used_tick = current_tick;
-            // 返回缓存节点指针
+            slot->cache_pool[i].last_used_tick = ++s_lru_logic_tick; // 使用自增逻辑时钟
             return &slot->cache_pool[i];
         }
 
-        // 查找空闲节点（unicode == 0xFFFF表示空闲）
         if (slot->cache_pool[i].unicode == 0xFFFF)
         {
-            // 记录空闲节点索引
             target_index = i;
+            break; // 强烈建议加上 break！找到空闲节点就立刻停止遍历，提升性能
         }
-        // 查找最久未使用的节点（LRU策略）
         else if (target_index == -1 &&
                  slot->cache_pool[i].last_used_tick < oldest_tick)
         {
-            // 更新最久未使用的时间戳和索引
             oldest_tick = slot->cache_pool[i].last_used_tick;
             oldest_index = i;
         }
     }
 
-    // 如果没有找到空闲节点，使用最久未使用的节点
     if (target_index == -1)
         target_index = oldest_index;
 
-    // 获取目标缓存节点指针
     EUBF_GlyphCache *node = &slot->cache_pool[target_index];
 
-    // 从磁盘读取字形数据
     if (EUBF_Read_Glyph_From_Disk(slot, unicode, node) == 0)
     {
-        // 设置Unicode字符码点
         node->unicode = unicode;
-        // 更新最后使用时间
-        node->last_used_tick = current_tick;
-        // 返回缓存节点指针
+        node->last_used_tick = ++s_lru_logic_tick; // 使用自增逻辑时钟
         return node;
     }
 
@@ -506,34 +497,51 @@ static int8_t EUBF_Read_Glyph_From_Disk(EUBF_Slot *slot, uint16_t unicode, EUBF_
     int8_t s_idx = (slot - g_eubf_slots);
     // 获取绑定的底层文件槽位号
     int8_t fd = s_file_fds[s_idx];
+    
+    // 【关键优化】：使用局部数组，避免 RTOS 多任务重入导致数据相互覆盖！
+    uint8_t buf = {0}; 
 
-    // 1. 读Page偏移：使用Unicode高8位作为索引
-    uint32_t page_offset = read_u32_le_safe(fd, slot->page_dir_offset + ((unicode >> 8) * 4));
+    // 1. 读Page偏移：使用 ReadAt 直接判断底层是否发生通信错误
+    uint32_t page_offset;
+    if (s_io_port.ReadAt(fd, slot->page_dir_offset + ((unicode >> 8) * 4), buf, 4) != 0) {
+        return -1; // 发生了硬件读取错误，立即中止，坚决不缓存垃圾数据！
+    }
+    // 注意这里必须带上数组下标
+    page_offset = (uint32_t)(buf | (buf << 8) | (buf << 16) | (buf << 24));
+
     uint16_t glyph_id = 0xFFFF;
 
-    // 2. 读Glyph ID：使用Unicode低8位作为索引
+    // 2. 读Glyph ID
     if (page_offset != 0xFFFFFFFF) {
-        glyph_id = read_u16_le_safe(fd, page_offset + ((unicode & 0xFF) * 2));
+        if (s_io_port.ReadAt(fd, page_offset + ((unicode & 0xFF) * 2), buf, 2) != 0) {
+            return -1; // 发生了硬件读取错误，立即中止
+        }
+        glyph_id = (uint16_t)(buf | (buf << 8));
     }
-    // 如果Page不存在或Glyph不存在，使用missing_glyph作为替代
+
+    // 此时此刻，如果 page_offset == 0xFFFFFFFF，那说明字库是真的缺这个字，而不是底层读挂了
     if (page_offset == 0xFFFFFFFF || glyph_id == 0xFFFF) {
         glyph_id = slot->missing_glyph;
     }
 
-    // 3. 读数据偏移：使用Glyph ID作为索引
-    uint32_t rel_addr = read_u32_le_safe(fd, slot->glyph_offset_offset + (glyph_id * 4));
+    // 3. 读数据偏移：使用 ReadAt 直接判断底层是否发生通信错误
+    uint32_t rel_addr;
+    if (s_io_port.ReadAt(fd, slot->glyph_offset_offset + (glyph_id * 4), buf, 4) != 0) {
+        return -1; // 发生了硬件读取错误，立即中止
+    }
+    rel_addr = (uint32_t)(buf | (buf << 8) | (buf << 16) | (buf << 24));
 
     // 4. 读Glyph头部信息（8个字节）
-    if (s_io_port.ReadAt(fd, slot->glyph_data_offset + rel_addr, s_meta_temp_buf, 8) != 0) {
+    if (s_io_port.ReadAt(fd, slot->glyph_data_offset + rel_addr, buf, 8) != 0) {
         return -1;
     }
 
     // 解析Glyph头部信息
-    target_node->box_w    = s_meta_temp_buf[0];  // 字形宽度
-    target_node->box_h    = s_meta_temp_buf[1];  // 字形高度
-    target_node->x_offset = (int8_t)s_meta_temp_buf[2];  // X轴偏移量
-    target_node->y_offset = (int8_t)s_meta_temp_buf[3];  // Y轴偏移量
-    target_node->advance  = (uint16_t)(s_meta_temp_buf[4] | (s_meta_temp_buf[5] << 8));  // 字符前进宽度
+    target_node->box_w    = buf;  // 字形宽度
+    target_node->box_h    = buf;  // 字形高度
+    target_node->x_offset = (int8_t)buf;  // X轴偏移量
+    target_node->y_offset = (int8_t)buf;  // Y轴偏移量
+    target_node->advance  = (uint16_t)(buf | (buf << 8));  // 字符前进宽度
 
     // 检查字形数据是否有效
     if (target_node->box_h == 0 && target_node->advance == 0) return -1;
