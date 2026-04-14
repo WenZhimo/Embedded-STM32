@@ -498,16 +498,16 @@ static int8_t EUBF_Read_Glyph_From_Disk(EUBF_Slot *slot, uint16_t unicode, EUBF_
     // 获取绑定的底层文件槽位号
     int8_t fd = s_file_fds[s_idx];
     
-    // 【关键优化】：使用局部数组，避免 RTOS 多任务重入导致数据相互覆盖！
-    uint8_t buf = {0}; 
+    // [关键优化]：使用局部数组，避免 RTOS 多任务重入导致数据相互覆盖！
+    uint8_t buf[8] = {0}; 
 
     // 1. 读Page偏移：使用 ReadAt 直接判断底层是否发生通信错误
     uint32_t page_offset;
     if (s_io_port.ReadAt(fd, slot->page_dir_offset + ((unicode >> 8) * 4), buf, 4) != 0) {
         return -1; // 发生了硬件读取错误，立即中止，坚决不缓存垃圾数据！
     }
-    // 注意这里必须带上数组下标
-    page_offset = (uint32_t)(buf | (buf << 8) | (buf << 16) | (buf << 24));
+    // 合并4字节，注意这里的数组下标
+    page_offset = (uint32_t)(buf[0] | (buf[1] << 8) | (buf[2] << 16) | (buf[3] << 24));
 
     uint16_t glyph_id = 0xFFFF;
 
@@ -516,7 +516,7 @@ static int8_t EUBF_Read_Glyph_From_Disk(EUBF_Slot *slot, uint16_t unicode, EUBF_
         if (s_io_port.ReadAt(fd, page_offset + ((unicode & 0xFF) * 2), buf, 2) != 0) {
             return -1; // 发生了硬件读取错误，立即中止
         }
-        glyph_id = (uint16_t)(buf | (buf << 8));
+        glyph_id = (uint16_t)(buf[0] | (buf[1] << 8));
     }
 
     // 此时此刻，如果 page_offset == 0xFFFFFFFF，那说明字库是真的缺这个字，而不是底层读挂了
@@ -529,7 +529,7 @@ static int8_t EUBF_Read_Glyph_From_Disk(EUBF_Slot *slot, uint16_t unicode, EUBF_
     if (s_io_port.ReadAt(fd, slot->glyph_offset_offset + (glyph_id * 4), buf, 4) != 0) {
         return -1; // 发生了硬件读取错误，立即中止
     }
-    rel_addr = (uint32_t)(buf | (buf << 8) | (buf << 16) | (buf << 24));
+    rel_addr = (uint32_t)(buf[0] | (buf[1] << 8) | (buf[2] << 16) | (buf[3] << 24));
 
     // 4. 读Glyph头部信息（8个字节）
     if (s_io_port.ReadAt(fd, slot->glyph_data_offset + rel_addr, buf, 8) != 0) {
@@ -537,11 +537,11 @@ static int8_t EUBF_Read_Glyph_From_Disk(EUBF_Slot *slot, uint16_t unicode, EUBF_
     }
 
     // 解析Glyph头部信息
-    target_node->box_w    = buf;  // 字形宽度
-    target_node->box_h    = buf;  // 字形高度
-    target_node->x_offset = (int8_t)buf;  // X轴偏移量
-    target_node->y_offset = (int8_t)buf;  // Y轴偏移量
-    target_node->advance  = (uint16_t)(buf | (buf << 8));  // 字符前进宽度
+    target_node->box_w    = buf[0];  // 字形宽度
+    target_node->box_h    = buf[1];  // 字形高度
+    target_node->x_offset = (int8_t)buf[2];  // X轴偏移量
+    target_node->y_offset = (int8_t)buf[3];  // Y轴偏移量
+    target_node->advance  = (uint16_t)(buf[4] | (buf[5] << 8));  // 字符前进宽度
 
     // 检查字形数据是否有效
     if (target_node->box_h == 0 && target_node->advance == 0) return -1;
