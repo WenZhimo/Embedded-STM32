@@ -19,6 +19,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
+#include "projdefs.h"
 #include "task.h"
 #include "main.h"
 #include "cmsis_os.h"
@@ -226,7 +227,7 @@ void App_Task_showADC(void *argument)
                         portMAX_DELAY);
 
   lcd_dma2d_show_eubf_str(0, 32,(char*)"ADC Value:", "BoutiqueBitmap7x7_Circle_Dot", 30, WHITE);
-  
+  uint32_t show_adc_value = 0;
   // 等待应用启动完成
   xEventGroupSync(xAppStartEventGroupHandle,
                   1 << 0, // APP_START_EVENT_SHOW_ADC_READY
@@ -236,14 +237,14 @@ void App_Task_showADC(void *argument)
   for(;;)
   {
     // 等待数据准备就绪
-    if(xSemaphoreTake(BinarySem_DataReadyHandle, portMAX_DELAY) == pdTRUE){
+    if(xTaskNotifyWait(0,0XFFFFFFFF, &show_adc_value, portMAX_DELAY) == pdTRUE){
       // 数据已准备好，继续执行
       // 显示ADC值
       char adc_str[16];
       // 格式化输出，保留4位
-      snprintf(adc_str, sizeof(adc_str), "%04lu", adc_value);
+      snprintf(adc_str, sizeof(adc_str), "%04lu", show_adc_value);
       // 转换为RGB565颜色
-      uint16_t rgb565 = (uint16_t)((((adc_value >> 8) & 0xF) * 0x21 << 10) | (((adc_value >> 4) & 0xF) * 0x44 << 4) | ((adc_value & 0xF) * 0x21 >> 4));
+      uint16_t rgb565 = (uint16_t)((((show_adc_value >> 8) & 0xF) * 0x21 << 10) | (((show_adc_value >> 4) & 0xF) * 0x44 << 4) | ((show_adc_value & 0xF) * 0x21 >> 4));
       
       lcd_dma2d_fill(0, 32, 160, 65, BLACK);
       lcd_dma2d_show_eubf_str(0, 64,(char*)adc_str, "BoutiqueBitmap7x7_Circle_Dot", 32, rgb565);
@@ -283,7 +284,7 @@ void App_Task_CheckIn(void *argument)
 
   osDelay(1500); 
 
-  sprintf(temp_str, "%lu", uxSemaphoreGetCount(CountingSem_TableHandle));
+  //sprintf(temp_str, "%lu", uxSemaphoreGetCount(CountingSem_TableHandle));
   
   // 等待应用启动完成
   xEventGroupSync(xAppStartEventGroupHandle,
@@ -293,7 +294,7 @@ void App_Task_CheckIn(void *argument)
   // 第一行：Y=32 (0~32)
   lcd_dma2d_show_eubf_str(160, 32, (char*)"TOTAL_TABLE:", "BoutiqueBitmap7x7_Scan_Line", 22, YELLOW);
   // 第二行：Y=64 (32~64)
-  lcd_dma2d_show_eubf_str(160, 64, temp_str, "BoutiqueBitmap7x7_Scan_Line", 32, YELLOW);
+  lcd_dma2d_show_eubf_str(160, 64, "无限个！∞!", "BoutiqueBitmap7x7_Scan_Line", 32, GREEN);
   // 第三行：Y=96 (64~96)
   lcd_dma2d_show_eubf_str(160, 96, (char*)"AVAILABLE:", "BoutiqueBitmap7x7_Scan_Line", 24, RED);
   
@@ -309,7 +310,7 @@ void App_Task_CheckIn(void *argument)
       // 清除第五行 (占据 128~160)
       lcd_dma2d_fill(160, 128, 320, 160+1, BLACK); 
       
-      if(xSemaphoreTake(CountingSem_TableHandle, 100) == pdTRUE){
+      if(ulTaskNotifyTake(pdFALSE, 0) > 0){
         lcd_dma2d_show_eubf_str(160, 160, (char*)"CheckIn OK", "BoutiqueBitmap7x7_Scan_Line", 24, GREEN);
       } else {
         lcd_dma2d_show_eubf_str(160, 160, (char*)"CheckIn Failed", "BoutiqueBitmap7x7_Scan_Line", 24, RED);
@@ -318,7 +319,7 @@ void App_Task_CheckIn(void *argument)
     }
 
     // 按需刷新
-    current_count = uxSemaphoreGetCount(CountingSem_TableHandle);
+    current_count = ulTaskNotifyValueClear(NULL, 0x00);
     if(current_count != last_count)
     {
       sprintf(temp_str, "%lu", (unsigned long)current_count);
@@ -343,25 +344,24 @@ void App_Task_CheckIn(void *argument)
 /* USER CODE BEGIN Application */
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
   if(hadc->Instance == ADC1){
-    adc_value = HAL_ADC_GetValue(hadc);
+    // adc_value = HAL_ADC_GetValue(hadc);
     //printf("ADC Conversion Completed!\r\n");
     BaseType_t highter_priority_task_woken = pdFALSE;
-    if(BinarySem_DataReadyHandle != NULL){// 确保信号量已创建
-      // 释放信号量，通知显示任务数据已准备好
-      xSemaphoreGiveFromISR(BinarySem_DataReadyHandle, &highter_priority_task_woken);
-      portYIELD_FROM_ISR(highter_priority_task_woken);
+    if(Task_showADCHandle != NULL){ // 确保任务句柄已创建
+      // 直接将ADC值作为通知值发送给显示任务
+      xTaskNotifyFromISR(Task_showADCHandle, HAL_ADC_GetValue(hadc), eSetValueWithOverwrite,&highter_priority_task_woken);
+      portYIELD_FROM_ISR(highter_priority_task_woken);  
     }
-    
-
+     
   }
 }
 
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc){
   // 这里可以添加定时器事件处理代码
-  //释放计数信号量
-  if(CountingSem_TableHandle != NULL){ // 确保信号量已创建
+  
+  if(Task_CheckInHandle != NULL){ // 确保任务已创建
     BaseType_t highter_priority_task_woken = pdFALSE;
-    xSemaphoreGiveFromISR(CountingSem_TableHandle, &highter_priority_task_woken);
+    vTaskNotifyGiveFromISR(Task_CheckInHandle, &highter_priority_task_woken);
     portYIELD_FROM_ISR(highter_priority_task_woken);
   }
 }
