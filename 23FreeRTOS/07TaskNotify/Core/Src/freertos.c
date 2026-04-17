@@ -19,6 +19,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
+#include "lcd_dma2d.h"
 #include "task.h"
 #include "main.h"
 #include "cmsis_os.h"
@@ -31,6 +32,7 @@
 #include "event_groups.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <sys/_intsup.h>
 
 /* USER CODE END Includes */
 
@@ -74,6 +76,11 @@ const osThreadAttr_t Task_CheckIn_attributes = {
   .name = "Task_CheckIn",
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for DMA2D_Mutex */
+osMutexId_t DMA2D_MutexHandle;
+const osMutexAttr_t DMA2D_Mutex_attributes = {
+  .name = "DMA2D_Mutex"
 };
 /* Definitions for xSystemInitEventGroup */
 osEventFlagsId_t xSystemInitEventGroupHandle;
@@ -123,6 +130,9 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
+  /* Create the mutex(es) */
+  /* creation of DMA2D_Mutex */
+  DMA2D_MutexHandle = osMutexNew(&DMA2D_Mutex_attributes);
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
@@ -154,7 +164,6 @@ void MX_FREERTOS_Init(void) {
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
 
-  /* Create the event(s) */
   /* creation of xSystemInitEventGroup */
   xSystemInitEventGroupHandle = osEventFlagsNew(&xSystemInitEventGroup_attributes);
 
@@ -208,7 +217,10 @@ void App_Task_showADC(void *argument)
                         pdTRUE,
                         portMAX_DELAY);
 
+  xSemaphoreTake(DMA2D_MutexHandle, portMAX_DELAY);
   lcd_dma2d_show_eubf_str(0, 32,(char*)"ADC Value:", "BoutiqueBitmap7x7_Circle_Dot", 30, WHITE);
+  lcd_dma2d_update_screen();
+  xSemaphoreGive(DMA2D_MutexHandle);
   uint32_t show_adc_value = 0;
   // 等待应用启动完成
   xEventGroupSync(xAppStartEventGroupHandle,
@@ -219,22 +231,35 @@ void App_Task_showADC(void *argument)
   for(;;)
   {
     // 等待数据准备就绪
-    if(xTaskNotifyWait(0,0XFFFFFFFF, &show_adc_value, portMAX_DELAY) == pdTRUE){
-      // 数据已准备好，继续执行
-      // 显示ADC值
-      char adc_str[16];
-      // 格式化输出，保留4位
-      snprintf(adc_str, sizeof(adc_str), "%04lu", show_adc_value);
-      // 转换为RGB565颜色
-      uint16_t rgb565 = (uint16_t)((((show_adc_value >> 8) & 0xF) * 0x21 << 10) | (((show_adc_value >> 4) & 0xF) * 0x44 << 4) | ((show_adc_value & 0xF) * 0x21 >> 4));
+    if(xTaskNotifyWait(0, 0XFFFFFFFF, &show_adc_value, portMAX_DELAY) == pdTRUE){
       
-      lcd_dma2d_fill(0, 32, 160, 65, BLACK);
-      lcd_dma2d_show_eubf_str(0, 64,(char*)adc_str, "BoutiqueBitmap7x7_Circle_Dot", 32, rgb565);
+      xSemaphoreTake(DMA2D_MutexHandle, portMAX_DELAY); // 先拿锁
+      
+      if(show_adc_value == 0xFFFFFFFF) {
+          // --- 处理错误情况 ---
+          static uint8_t error_count = 0;
+          error_count++;
+          char adc_err_str[30];
+          snprintf(adc_err_str, sizeof(adc_err_str), "ADC Error: %d", error_count);
+          
+          lcd_dma2d_fill(0, 96, 160, 128, BLACK); 
+          lcd_dma2d_show_eubf_str(0, 96, adc_err_str, "BoutiqueBitmap7x7_Circle_Dot", 32, RED);
+      } else {
+          // --- 处理正常情况 ---
+          char adc_str[20];
+          snprintf(adc_str, sizeof(adc_str), "%04lu", show_adc_value);
+          uint16_t rgb565 = (uint16_t)((((show_adc_value >> 8) & 0xF) * 0x21 << 10) | (((show_adc_value >> 4) & 0xF) * 0x44 << 4) | ((show_adc_value & 0xF) * 0x21 >> 4));
+          
+          lcd_dma2d_fill(0, 32, 160, 65, BLACK);
+          lcd_dma2d_show_eubf_str(0, 64, adc_str, "BoutiqueBitmap7x7_Circle_Dot", 32, rgb565);
+      }
+      
       lcd_dma2d_update_screen();
+      xSemaphoreGive(DMA2D_MutexHandle); // 后放锁
+      
       osDelay(1);
     }
     osDelay(1);
-    
   }
   /* USER CODE END App_Task_showADC */
 }
@@ -273,6 +298,7 @@ void App_Task_CheckIn(void *argument)
                   1 << 1, // APP_START_EVENT_SHOW_CHECKIN_READY
                   (1 << 0)|(1 << 1), // APP_START_EVENT_SHOW_ADC_READY | APP_START_EVENT_SHOW_CHECKIN_READY
                   portMAX_DELAY);
+  xSemaphoreTake(DMA2D_MutexHandle, portMAX_DELAY);
   // 第一行：Y=32 (0~32)
   lcd_dma2d_show_eubf_str(160, 32, (char*)"TOTAL_TABLE:", "BoutiqueBitmap7x7_Scan_Line", 22, YELLOW);
   // 第二行：Y=64 (32~64)
@@ -282,7 +308,9 @@ void App_Task_CheckIn(void *argument)
   
   // 第一次推送到屏幕
   lcd_dma2d_update_screen();
-
+  xSemaphoreGive(DMA2D_MutexHandle);
+  
+  
   /* Infinite loop */
   for(;;)
   {
@@ -290,14 +318,17 @@ void App_Task_CheckIn(void *argument)
     // 按键处理
     if(myGetKeyPressStateByID(KEY_UP)){
       // 清除第五行 (占据 128~160)
-      lcd_dma2d_fill(160, 128, 320, 160+1, BLACK); 
       
+      xSemaphoreTake(DMA2D_MutexHandle, portMAX_DELAY);
+      lcd_dma2d_fill(160, 128, 320, 160+1, BLACK); 
+
       if(ulTaskNotifyTake(pdFALSE, 0) > 0){
         lcd_dma2d_show_eubf_str(160, 160, (char*)"CheckIn OK", "BoutiqueBitmap7x7_Scan_Line", 24, GREEN);
       } else {
         lcd_dma2d_show_eubf_str(160, 160, (char*)"CheckIn Failed", "BoutiqueBitmap7x7_Scan_Line", 24, RED);
       }
       lcd_dma2d_update_screen();
+      xSemaphoreGive(DMA2D_MutexHandle);
     }
 
     // 按需刷新
@@ -307,11 +338,13 @@ void App_Task_CheckIn(void *argument)
       sprintf(temp_str, "%lu", (unsigned long)current_count);
       
       // 清除第四行 (占据 96~128)
+      xSemaphoreTake(DMA2D_MutexHandle, portMAX_DELAY);
       lcd_dma2d_fill(160, 96, 320, 128+1, BLACK); 
       // 绘制第四行数字
       lcd_dma2d_show_eubf_str(160, 128, temp_str, "BoutiqueBitmap7x7_Scan_Line", 32, current_count?GREEN:RED);
       
       lcd_dma2d_update_screen();
+      xSemaphoreGive(DMA2D_MutexHandle);
       last_count = current_count;
     }
     
@@ -336,6 +369,20 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
     }
      
   }
+}
+void HAL_ADC_ErrorCallback(ADC_HandleTypeDef *hadc) {
+    if(hadc->Instance == ADC1) {
+        BaseType_t highter_priority_task_woken = pdFALSE;
+        
+        if(Task_showADCHandle != NULL){
+            // 发送 0xFFFFFFFF 代表发生错误
+            xTaskNotifyFromISR(Task_showADCHandle, 0xFFFFFFFF, eSetValueWithOverwrite, &highter_priority_task_woken);
+            portYIELD_FROM_ISR(highter_priority_task_woken);  
+        }
+        
+        // 尝试清除错误并重启 ADC
+        HAL_ADC_Start_IT(hadc); 
+    }
 }
 
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc){
