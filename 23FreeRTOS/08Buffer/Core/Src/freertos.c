@@ -19,7 +19,6 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
-#include "lcd_dma2d.h"
 #include "task.h"
 #include "main.h"
 #include "cmsis_os.h"
@@ -29,14 +28,18 @@
 #include "../../ThirdParty/MyLib/myinclude.h"
 #include "rtc.h"
 #include "semphr.h"
+#include "stream_buffer.h"
 #include "event_groups.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/_intsup.h>
+#include "sodium.h"
+#include "string.h"
 
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
+typedef StaticTask_t osStaticThreadDef_t;
 /* USER CODE BEGIN PTD */
 
 /* USER CODE END PTD */
@@ -53,8 +56,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-//uint32_t adc_value = 0;
-
+// 加密数据流缓冲区句柄
+StreamBufferHandle_t xCryptoStreamBuffer = NULL;
 /* USER CODE END Variables */
 /* Definitions for Task_SYS_INIT */
 osThreadId_t Task_SYS_INITHandle;
@@ -76,6 +79,18 @@ const osThreadAttr_t Task_CheckIn_attributes = {
   .name = "Task_CheckIn",
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for Task_Crypto */
+osThreadId_t Task_CryptoHandle;
+uint32_t Task_CryptoBuffer[ 256 ];
+osStaticThreadDef_t Task_CryptoControlBlock;
+const osThreadAttr_t Task_Crypto_attributes = {
+  .name = "Task_Crypto",
+  .cb_mem = &Task_CryptoControlBlock,
+  .cb_size = sizeof(Task_CryptoControlBlock),
+  .stack_mem = &Task_CryptoBuffer[0],
+  .stack_size = sizeof(Task_CryptoBuffer),
+  .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for DMA2D_Mutex */
 osMutexId_t DMA2D_MutexHandle;
@@ -101,6 +116,7 @@ const osEventFlagsAttr_t xAppStartEventGroup_attributes = {
 void AppTask_SYS_INIT(void *argument);
 void App_Task_showADC(void *argument);
 void App_Task_CheckIn(void *argument);
+void AppTask_Crypto(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -128,7 +144,8 @@ return 0;
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
-
+  //创建加密数据流缓冲区
+  xCryptoStreamBuffer = xStreamBufferCreate(1024, 1);
   /* USER CODE END Init */
   /* Create the mutex(es) */
   /* creation of DMA2D_Mutex */
@@ -159,6 +176,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of Task_CheckIn */
   Task_CheckInHandle = osThreadNew(App_Task_CheckIn, NULL, &Task_CheckIn_attributes);
+
+  /* creation of Task_Crypto */
+  Task_CryptoHandle = osThreadNew(AppTask_Crypto, NULL, &Task_Crypto_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -353,6 +373,91 @@ void App_Task_CheckIn(void *argument)
 
   }
   /* USER CODE END App_Task_CheckIn */
+}
+
+#include "mbedtls/base64.h" // 🌟 必须包含 mbedTLS 的 Base64 头文件
+#include <stdio.h>
+
+/* USER CODE BEGIN Header_AppTask_Crypto */
+/**
+* @brief Function implementing the Task_Crypto thread.
+* @param argument: Not used
+* @retval None
+*/
+#define STREAM_TIMEOUT_MS 200 // 200ms 超时视为 EOF
+/* USER CODE END Header_AppTask_Crypto */
+void AppTask_Crypto(void *argument)
+{
+  /* USER CODE BEGIN AppTask_Crypto */
+
+  xEventGroupWaitBits(xSystemInitEventGroupHandle, 
+                      SYSTEM_INIT_EVENT_SODIUM_READY | 
+                      SYSTEM_INIT_EVENT_USART1_READY , 
+                      pdFALSE, pdTRUE, portMAX_DELAY);
+
+  // mbedTLS 专用：3 个明文字节编码后是 4 个字符，加上 '\0' 一共需要 5 个字节
+  unsigned char b64_chunk[5]; 
+  size_t olen = 0; // 用于接收 mbedTLS 返回的实际编码长度
+
+  uint8_t block[3];
+  uint8_t block_len = 0;
+  uint8_t is_receiving = 0;
+
+  /* Infinite loop */
+  for(;;)
+  {
+    uint8_t byte;
+    // 阻塞等待流缓冲区的数据，每次读取 1 个字节
+    size_t xReceivedBytes = xStreamBufferReceive(
+      xCryptoStreamBuffer, 
+      &byte, 
+      1, 
+      pdMS_TO_TICKS(STREAM_TIMEOUT_MS)
+    );
+
+    // ==========================================
+    // 读到了数据 
+    // ==========================================
+    if (xReceivedBytes > 0) 
+    {
+        if (!is_receiving) {
+            printf("\r\n--- Streaming Base64 Encode (mbedTLS) ---\r\nText:\r\n");
+            is_receiving = 1;
+        }
+
+        block[block_len] = byte;
+        block_len++;
+
+        // 凑满 3 个字节，立刻编码发走
+        if (block_len == 3) {
+            // 🌟 核心替换：调用 mbedTLS 的编码函数
+            mbedtls_base64_encode(b64_chunk, sizeof(b64_chunk), &olen, block, 3);
+            
+            // mbedTLS 会自动在末尾添加 '\0'，所以可以直接用 %s 打印
+            printf("%s", b64_chunk);
+            block_len = 0;
+        }
+    }
+    // ==========================================
+    // 发生了超时 (200ms 内连 1 个字节都没收到) -> 数据流结束！
+    // ==========================================
+    else if (is_receiving) 
+    {
+        // 处理最后不够 3 个字节的尾巴，生成带有 "=" 的 Base64
+        if (block_len > 0) {
+            // 🌟 核心替换：根据实际剩余的 block_len 进行编码
+            mbedtls_base64_encode(b64_chunk, sizeof(b64_chunk), &olen, block, block_len);
+            printf("%s", b64_chunk);
+            block_len = 0;
+        }
+
+        printf("\r\n-------------------------------\r\n");
+        UBaseType_t free_stack = uxTaskGetStackHighWaterMark(NULL);
+        printf("AppTask_Crypto Free Stack High Water Mark: %lu\r\n", free_stack);
+        is_receiving = 0; // 状态机复位
+    }
+  }
+  /* USER CODE END AppTask_Crypto */
 }
 
 /* Private application code --------------------------------------------------*/

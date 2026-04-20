@@ -12,7 +12,7 @@ if(EXISTS "${USER_LIB_DIR}")
         "${USER_LIB_DIR}/*.c"
     )
 
-    # 3. 精准剔除（如果新项目没这个文件，list 会自动忽略，不会报错）
+    # 3. 精准剔除
     list(REMOVE_ITEM USER_SOURCES 
         "${USER_LIB_DIR}/MyLib/LCD/lcd_ex.c"
     )
@@ -27,11 +27,30 @@ if(EXISTS "${USER_LIB_DIR}")
     list(REMOVE_DUPLICATES USER_INC_DIRS)
 
     # 5. 直接将资源注入到主目标中
-    # 注意：这里的 ${CMAKE_PROJECT_NAME} 必须在 include 之前已定义
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${USER_SOURCES})
     target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${USER_INC_DIRS})
 
     message(STATUS "ThirdParty: Added ${USER_SOURCES}")
+
+    # =======================================================
+    # 6. 新增：处理 libsodium 静态库链接
+    # =======================================================
+    set(LIBSODIUM_LIB_PATH "${USER_LIB_DIR}/libsodium/lib/libsodium.a")
+    
+    # 检查 .a 文件是否存在
+    if(EXISTS "${LIBSODIUM_LIB_PATH}")
+        # 声明一个导入的静态库
+        add_library(sodium STATIC IMPORTED)
+        # 指定该库的物理路径
+        set_target_properties(sodium PROPERTIES IMPORTED_LOCATION "${LIBSODIUM_LIB_PATH}")
+        # 将静态库链接到主工程
+        target_link_libraries(${CMAKE_PROJECT_NAME} sodium)
+        message(STATUS "ThirdParty: Linked libsodium.a successfully")
+    else()
+        message(WARNING "ThirdParty: libsodium.a not found at ${LIBSODIUM_LIB_PATH}")
+    endif()
+    # =======================================================
+
 else()
     message(WARNING "ThirdParty directory NOT found at: ${USER_LIB_DIR}")
 endif()

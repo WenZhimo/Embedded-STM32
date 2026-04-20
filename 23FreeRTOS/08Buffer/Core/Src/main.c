@@ -23,6 +23,8 @@
 #include "dma.h"
 #include "dma2d.h"
 #include "fatfs.h"
+#include "mbedtls.h"
+#include "rng.h"
 #include "rtc.h"
 #include "sdio.h"
 #include "tim.h"
@@ -106,8 +108,12 @@ int main(void)
   MX_TIM3_Init();
   MX_RTC_Init();
   MX_USART1_UART_Init();
+  MX_RNG_Init();
+  /* Call PreOsInit function */
+  MX_MBEDTLS_Init();
   /* USER CODE BEGIN 2 */
   //初始化内容在myfreertos.c的AppTask_SYS_INIT任务中实现
+  
   /* USER CODE END 2 */
 
   /* Init scheduler */

@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.22)
 enable_language(C ASM)
 # STM32CubeMX generated symbols (macros)
 set(MX_Defines_Syms 
+	MBEDTLS_CONFIG_FILE=<mbedtls_config.h> 
 	USE_HAL_DRIVER 
 	STM32F429xx
     $<$<CONFIG:Debug>:DEBUG>
@@ -13,18 +14,23 @@ set(MX_Include_Dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../FATFS/Target
     ${CMAKE_CURRENT_SOURCE_DIR}/../../FATFS/App
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../MBEDTLS/App
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32F4xx_HAL_Driver/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/FreeRTOS/Source/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/FatFs/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/include/mbedtls
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/CMSIS/Include
 )
 
 # STM32CubeMX generated application sources
 set(MX_Application_Src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../MBEDTLS/App/mbedtls.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../MBEDTLS/Target/hardware_rng.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../FATFS/App/fatfs.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../FATFS/Target/bsp_driver_sd.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../FATFS/Target/sd_diskio.c
@@ -35,6 +41,7 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/dma.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/dma2d.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/fmc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/rng.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/rtc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/sdio.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/tim.c
@@ -75,6 +82,7 @@ set(STM32_Drivers_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_nand.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pccard.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_sdram.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rng.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_sdmmc.c
@@ -98,6 +106,45 @@ set(FreeRTOS_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c
 )
+set(mbedTLS_Src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/aes.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/asn1parse.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/asn1write.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/base64.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/bignum.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/camellia.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/certs.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/chacha20.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/chachapoly.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/cipher.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/cipher_wrap.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/ctr_drbg.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/dhm.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/ecdh.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/ecdsa.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/ecp.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/ecp_curves.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/entropy.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/entropy_poll.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/gcm.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/hkdf.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/md.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/md_wrap.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/memory_buffer_alloc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/oid.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/pem.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/pk.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/pkparse.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/pk_wrap.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/platform.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/platform_util.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/poly1305.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/rsa_internal.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/sha256.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/sha512.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/ssl_ciphersuites.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/mbedTLS/library/version_features.c
+)
 set(FatFs_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/FatFs/src/diskio.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Middlewares/Third_Party/FatFs/src/ff.c
@@ -114,7 +161,7 @@ set(MX_LINK_DIRS
 set(MX_LINK_LIBS 
     STM32_Drivers
     ${TOOLCHAIN_LINK_LIBRARIES}
-    FreeRTOS	FatFs	
+    FreeRTOS	mbedTLS	FatFs	
 )
 # Interface library for includes and symbols
 add_library(stm32cubemx INTERFACE)
@@ -131,6 +178,11 @@ target_link_libraries(STM32_Drivers PUBLIC stm32cubemx)
 add_library(FreeRTOS OBJECT)
 target_sources(FreeRTOS PRIVATE ${FreeRTOS_Src})
 target_link_libraries(FreeRTOS PUBLIC stm32cubemx)
+
+# Create mbedTLS static library
+add_library(mbedTLS OBJECT)
+target_sources(mbedTLS PRIVATE ${mbedTLS_Src})
+target_link_libraries(mbedTLS PUBLIC stm32cubemx)
 
 # Create FatFs static library
 add_library(FatFs OBJECT)

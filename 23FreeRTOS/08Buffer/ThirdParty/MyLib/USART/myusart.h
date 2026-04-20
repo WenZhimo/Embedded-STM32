@@ -3,7 +3,7 @@
 
 #include "usart.h"
 
-#define MAX_CMD_LEN 256
+#define MAX_CMD_LEN 8
 
 extern uint8_t rx_buffer_1[MAX_CMD_LEN];
 extern uint8_t rx_buffer_1_flag;

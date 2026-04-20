@@ -2,9 +2,15 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
+#include "stream_buffer.h"
+
+
 
 uint8_t rx_buffer_1[MAX_CMD_LEN];
 uint8_t rx_buffer_1_flag = 0;
+
+extern TaskHandle_t Task_CryptoHandle;
+extern StreamBufferHandle_t xCryptoStreamBuffer; // 引入全局句柄
 
 /* 串口与DMA接收初始化函数 */
 void MyUSART_Init(void)
@@ -31,25 +37,28 @@ int _write(int file, char *data, int len)
     return len;
 }
 
+
+
 /* 串口接收事件回调函数 */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if (huart->Instance == USART1)
     {
-        // 此时一包数据接收完成
-        // Size 变量就是本次实际接收到的字节数！非常方便！
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
         
-        // 1. 数据处理
-        // 示例：将接收到的指令丢给某个处理函数
-        // ParseMotorCommand(rx_buffer_1, Size); 
-        
-        // HAL_UART_Transmit(&huart1, rx_buffer_1, Size, 100);
-        rx_buffer_1_flag = Size; // 设置标志位，通知任务有新数据了
+        // 1. 将接收到的数据一键送入 Stream Buffer
+        if (xCryptoStreamBuffer != NULL) {
+            xStreamBufferSendFromISR(xCryptoStreamBuffer, 
+                                     rx_buffer_1, 
+                                     Size, 
+                                     &xHigherPriorityTaskWoken);
+        }
 
-        // 2. 重新启动接收，准备接收下一帧变长指令
+        // 2. 重新启动 DMA 接收
         HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rx_buffer_1, MAX_CMD_LEN);
-        
-        // 紧接着关闭 DMA 的半传输中断 
         __HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
+        
+        // 3. 立即触发上下文切换，让任务秒级响应
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
