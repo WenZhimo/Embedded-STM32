@@ -29,17 +29,23 @@
 #include "rtc.h"
 #include "semphr.h"
 #include "stream_buffer.h"
+#include "message_buffer.h"
 #include "event_groups.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/_intsup.h>
+#include <sys/types.h>
 #include "sodium.h"
 #include "string.h"
+#include "rng.h"
+
+
 
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 typedef StaticTask_t osStaticThreadDef_t;
+
 /* USER CODE BEGIN PTD */
 
 /* USER CODE END PTD */
@@ -56,8 +62,10 @@ typedef StaticTask_t osStaticThreadDef_t;
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
+extern RNG_HandleTypeDef hrng;
 // 加密数据流缓冲区句柄
 StreamBufferHandle_t xCryptoStreamBuffer = NULL;
+MessageBufferHandle_t xKeyMessageBuffer = NULL;
 /* USER CODE END Variables */
 /* Definitions for Task_SYS_INIT */
 osThreadId_t Task_SYS_INITHandle;
@@ -146,6 +154,8 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
   //创建加密数据流缓冲区
   xCryptoStreamBuffer = xStreamBufferCreate(1024, 1);
+  //创建按键消息缓冲区
+  xKeyMessageBuffer = xMessageBufferCreate(256);
   /* USER CODE END Init */
   /* Create the mutex(es) */
   /* creation of DMA2D_Mutex */
@@ -305,78 +315,129 @@ void App_Task_CheckIn(void *argument)
                         portMAX_DELAY);
 
   
-  char temp_str[30];
-  UBaseType_t last_count = 0xFFFFFFFF; 
-  UBaseType_t current_count = 0;
+    char temp_str[30];
+    UBaseType_t last_count = 0xFFFFFFFF; 
+    UBaseType_t current_count = 0;
+    uint16_t latest_msg = 0;        // 记录最新一条消息内容
+    uint16_t last_msg    = 0xFFFF;   // 追踪 latest_msg 变化以刷新二进制行
 
-  osDelay(1500); 
+    osDelay(1500);  
 
-  //sprintf(temp_str, "%lu", uxSemaphoreGetCount(CountingSem_TableHandle));
+    // 等待应用启动完成
+    xEventGroupSync(xAppStartEventGroupHandle,
+                    1 << 1, // APP_START_EVENT_SHOW_CHECKIN_READY
+                    (1 << 0)|(1 << 1), // APP_START_EVENT_SHOW_ADC_READY | APP_START_EVENT_SHOW_CHECKIN_READY
+                    portMAX_DELAY);
+    xSemaphoreTake(DMA2D_MutexHandle, portMAX_DELAY);
+    // 第一行：Y=32 (0~32)
+    lcd_dma2d_show_eubf_str(160, 32, (char*)"TOTAL_TABLE:", "BoutiqueBitmap7x7_Scan_Line", 22, YELLOW);
+    // 第二行：Y=64 (32~64)
+    lcd_dma2d_show_eubf_str(160, 64, "无限!∞!", "BoutiqueBitmap7x7_Scan_Line", 32, GREEN);
+    // 第三行：Y=96 (64~96)
+    lcd_dma2d_show_eubf_str(160, 96, (char*)"AVAILABLE:", "BoutiqueBitmap7x7_Scan_Line", 24, RED);
   
-  // 等待应用启动完成
-  xEventGroupSync(xAppStartEventGroupHandle,
-                  1 << 1, // APP_START_EVENT_SHOW_CHECKIN_READY
-                  (1 << 0)|(1 << 1), // APP_START_EVENT_SHOW_ADC_READY | APP_START_EVENT_SHOW_CHECKIN_READY
-                  portMAX_DELAY);
-  xSemaphoreTake(DMA2D_MutexHandle, portMAX_DELAY);
-  // 第一行：Y=32 (0~32)
-  lcd_dma2d_show_eubf_str(160, 32, (char*)"TOTAL_TABLE:", "BoutiqueBitmap7x7_Scan_Line", 22, YELLOW);
-  // 第二行：Y=64 (32~64)
-  lcd_dma2d_show_eubf_str(160, 64, "无限!∞!", "BoutiqueBitmap7x7_Scan_Line", 32, GREEN);
-  // 第三行：Y=96 (64~96)
-  lcd_dma2d_show_eubf_str(160, 96, (char*)"AVAILABLE:", "BoutiqueBitmap7x7_Scan_Line", 24, RED);
+    // 第一次推送到屏幕
+    lcd_dma2d_update_screen();
+    xSemaphoreGive(DMA2D_MutexHandle);
   
-  // 第一次推送到屏幕
-  lcd_dma2d_update_screen();
-  xSemaphoreGive(DMA2D_MutexHandle);
-  
-  
-  /* Infinite loop */
-  for(;;)
-  {
-    
-    // 按键处理
-    if(myGetKeyPressStateByID(KEY_UP)){
-      // 清除第五行 (占据 128~160)
-      
-      xSemaphoreTake(DMA2D_MutexHandle, portMAX_DELAY);
-      lcd_dma2d_fill(160, 128, 320, 160+1, BLACK); 
-
-      if(ulTaskNotifyTake(pdFALSE, 0) > 0){
-        lcd_dma2d_show_eubf_str(160, 160, (char*)"CheckIn OK", "BoutiqueBitmap7x7_Scan_Line", 24, GREEN);
-      } else {
-        lcd_dma2d_show_eubf_str(160, 160, (char*)"CheckIn Failed", "BoutiqueBitmap7x7_Scan_Line", 24, RED);
-      }
-      lcd_dma2d_update_screen();
-      xSemaphoreGive(DMA2D_MutexHandle);
-    }
-
-    // 按需刷新
-    current_count = ulTaskNotifyValueClear(NULL, 0x00);
-    if(current_count != last_count)
+        /* Infinite loop */
+    for(;;)
     {
-      sprintf(temp_str, "%lu", (unsigned long)current_count);
-      
-      // 清除第四行 (占据 96~128)
-      xSemaphoreTake(DMA2D_MutexHandle, portMAX_DELAY);
-      lcd_dma2d_fill(160, 96, 320, 128+1, BLACK); 
-      // 绘制第四行数字
-      lcd_dma2d_show_eubf_str(160, 128, temp_str, "BoutiqueBitmap7x7_Scan_Line", 32, current_count?GREEN:RED);
-      
-      lcd_dma2d_update_screen();
-      xSemaphoreGive(DMA2D_MutexHandle);
-      last_count = current_count;
-    }
+      // ==========================================
+      // 实时读取 ISR 累积的任务通知增量（非阻塞）
+      // ==========================================
+      {
+        uint32_t notify_increment;
+        if(xTaskNotifyWait(0, 0xFFFFFFFF, &notify_increment, 0) == pdTRUE){
+          current_count += notify_increment;
+        }
+      }
+
+      // ==========================================
+      // 实时从消息缓冲区收取数据（非阻塞），只保留最新值
+      // ==========================================
+      {
+        uint16_t rtc_msg;
+        while(xMessageBufferReceive(xKeyMessageBuffer, &rtc_msg, sizeof(rtc_msg), 0) > 0){
+          latest_msg = rtc_msg;
+        }
+      }
+
+      // ==========================================
+      // 每 20ms：检查按键
+      // ==========================================
+      if(myGetKeyPressStateByID(KEY_UP)){
+        xSemaphoreTake(DMA2D_MutexHandle, portMAX_DELAY);
+        // 清除第五行 OK/FAIL 区域 (Y=160 是下边界, size=24 文字占据 Y=136~160)
+        lcd_dma2d_fill(160, 128, 320, 161, BLACK);  
+
+        if(current_count > 0)
+        {
+          // 签到成功
+          current_count--;
+          char checkin_str[30];
+          snprintf(checkin_str, sizeof(checkin_str), "OK:%04X", latest_msg);
+          lcd_dma2d_show_eubf_str(160, 160, checkin_str, "BoutiqueBitmap7x7_Scan_Line", 24, GREEN);
+        }
+        else
+        {
+          // 签到失败（无待签到计数）
+          char fail_str[30];
+          snprintf(fail_str, sizeof(fail_str), "FAIL:%04X", latest_msg);
+          lcd_dma2d_show_eubf_str(160, 160, fail_str, "BoutiqueBitmap7x7_Scan_Line", 24, RED);
+        }
+
+                lcd_dma2d_update_screen();
+        xSemaphoreGive(DMA2D_MutexHandle);
+      }
+
+      // ==========================================
+      // latest_msg 变化立即清除旧值并刷新二进制行
+      // ==========================================
+      if(latest_msg != last_msg)
+      {
+        xSemaphoreTake(DMA2D_MutexHandle, portMAX_DELAY);
+
+        // 清除二进制行（Y=192 下边界, size=8 占据 184~192, 多清一些确保覆盖残留像素）
+        lcd_dma2d_fill(160, 176, 320, 193, BLACK);
+
+        for(int i = 0; i < 16; i++) {
+          uint8_t bit = (latest_msg >> (15 - i)) & 0x01;
+          char bit_char[2] = { bit ? '1' : '0', '\0' };
+          uint16_t color = bit ? GREEN : RED;
+          lcd_dma2d_show_eubf_str(160 + i * 8, 192, bit_char, "3x3等宽monospace", 8, color);
+        }
+
+        lcd_dma2d_update_screen();
+        xSemaphoreGive(DMA2D_MutexHandle);
+        last_msg = latest_msg;
+      }
+
+      // ==========================================
+      // 每次循环都检测 current_count 是否变化，变化立即刷新
+      // ==========================================
+      if(current_count != last_count)
+      {
+        sprintf(temp_str, "%lu", (unsigned long)current_count);
     
-    osDelay(100);
+        // 清除第四行 (占据 Y=96~128)
+        xSemaphoreTake(DMA2D_MutexHandle, portMAX_DELAY);
+        lcd_dma2d_fill(160, 96, 320, 129, BLACK); 
+        // 绘制第四行数字
+        lcd_dma2d_show_eubf_str(160, 128, temp_str, "BoutiqueBitmap7x7_Scan_Line", 32, current_count?GREEN:RED);
+    
+        lcd_dma2d_update_screen();
+        xSemaphoreGive(DMA2D_MutexHandle);
+        last_count = current_count;
+      }
+  
+      osDelay(20);
     
 
   }
   /* USER CODE END App_Task_CheckIn */
 }
 
-#include "mbedtls/base64.h" // 🌟 必须包含 mbedTLS 的 Base64 头文件
-#include <stdio.h>
 
 /* USER CODE BEGIN Header_AppTask_Crypto */
 /**
@@ -384,6 +445,8 @@ void App_Task_CheckIn(void *argument)
 * @param argument: Not used
 * @retval None
 */
+
+#include "mbedtls/base64.h" // 🌟 必须包含 mbedTLS 的 Base64 头文件
 #define STREAM_TIMEOUT_MS 200 // 200ms 超时视为 EOF
 /* USER CODE END Header_AppTask_Crypto */
 void AppTask_Crypto(void *argument)
@@ -491,11 +554,22 @@ void HAL_ADC_ErrorCallback(ADC_HandleTypeDef *hadc) {
 }
 
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc){
-  // 这里可以添加定时器事件处理代码
-  
-  if(Task_CheckInHandle != NULL){ // 确保任务已创建
+  // 发送任务通知增量 + 随机值到消息缓冲区
+  if(xKeyMessageBuffer != NULL){ // 确保消息缓冲区已创建
     BaseType_t highter_priority_task_woken = pdFALSE;
-    vTaskNotifyGiveFromISR(Task_CheckInHandle, &highter_priority_task_woken);
+    uint32_t rand_val;
+    
+    // 1. 将 App_Task_CheckIn 的任务通知值加 1
+    if(Task_CheckInHandle != NULL){
+      xTaskNotifyFromISR(Task_CheckInHandle, 1, eIncrement, &highter_priority_task_woken);
+    }
+    
+    // 2. 用消息缓冲区发送一个随机值
+    if(HAL_RNG_GenerateRandomNumber(&hrng, &rand_val) == HAL_OK){
+      uint16_t msg_val = (uint16_t)(rand_val & 0xFFFF);
+      xMessageBufferSendFromISR(xKeyMessageBuffer, &msg_val, sizeof(msg_val), &highter_priority_task_woken);
+    }
+    
     portYIELD_FROM_ISR(highter_priority_task_woken);
   }
 }
